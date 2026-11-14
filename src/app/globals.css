@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-manrope), system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --glass-fg: oklch(0.99 0 0);
+  --glass-muted: oklch(0.99 0 0 / 65%);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: oklch(0.18 0.05 250);
+  color: var(--glass-fg);
 }
+
+/* ---- Superficies de cristal ---- */
+@utility glass-strong {
+  background: oklch(0.15 0.02 260 / 45%);
+  border: 1px solid oklch(1 0 0 / 22%);
+  backdrop-filter: blur(48px) saturate(180%);
+  box-shadow: 0 20px 60px -20px oklch(0 0 0 / 50%), inset 0 1px 0 oklch(1 0 0 / 18%);
+}
+@utility glass {
+  background: oklch(1 0 0 / 10%);
+  border: 1px solid oklch(1 0 0 / 20%);
+  backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 10px 40px -15px oklch(0 0 0 / 40%), inset 0 1px 0 oklch(1 0 0 / 15%);
+}
+@utility glass-light {
+  background: oklch(1 0 0 / 8%);
+  border: 1px solid oklch(1 0 0 / 15%);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  &:hover { background: oklch(1 0 0 / 18%); border-color: oklch(1 0 0 / 35%); }
+}
+@utility text-glass { color: var(--glass-fg); }
+@utility text-glass-muted { color: var(--glass-muted); }
+
+/* ---- Fondo animado ---- */
+.jb-bg {
+  position: fixed; inset: 0; z-index: -1;
+  background: var(--g1);
+  transition: background 1.2s ease;
+}
+.jb-bg::before, .jb-bg::after {
+  content: ""; position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%;
+  filter: blur(90px); opacity: 0.85; transition: background 1.2s ease;
+  animation: jb-drift 22s ease-in-out infinite alternate;
+}
+.jb-bg::before { background: var(--g2); top: -20vmax; left: -15vmax; }
+.jb-bg::after { background: var(--g3); bottom: -25vmax; right: -15vmax; animation-delay: -8s; }
+@keyframes jb-drift { to { transform: translate(10vmax, 6vmax) scale(1.15); } }
+@keyframes jb-fade { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; } }
+.jb-enter { animation: jb-fade 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

@@ -1,9 +1,5 @@
-import Image from "next/image";
+import { EarthJukebox } from "@/components/earth-jukebox";
 
 export default function Home() {
-  return (
-    <div>
-      <p>NASA SPACE APPS CHALLENGE 2026</p>
-    </div>
-  );
+  return <EarthJukebox />;
 }
