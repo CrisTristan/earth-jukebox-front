@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
-import { AudioWaveform, BookOpen, House, Satellite, Smile, Users, Workflow } from "lucide-react";
+import { BookOpen, House, Satellite, Smile, Users, Workflow } from "lucide-react";
 import { useMascot } from "@/components/mascot/mascot-context";
 import { useVoice } from "@/components/voice/voice-context";
 import { VoiceSettings } from "@/components/voice/voice-settings";
@@ -56,9 +57,16 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
   return (
     <header data-voice-section="Top navigation bar" className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/45 backdrop-blur-xl">
       <div className="flex h-16 items-center justify-between gap-3 px-4 md:gap-6 md:px-10">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Earth Jukebox — Home">
-          <AudioWaveform className="h-5 w-5 text-teal-400" aria-hidden />
-          {/* En pantallas muy estrechas solo queda el icono, para no chocar con la barra de iconos */}
+        <Link href="/" className="flex shrink-0 items-center gap-2.5 self-stretch" aria-label="Earth Jukebox — Home">
+          <Image
+            src="/logo/stack_underflow.jfif"
+            alt=""
+            width={640}
+            height={640}
+            preload
+            className="h-full w-auto rounded-full object-cover"
+          />
+          {/* En pantallas muy estrechas solo queda el logo, para no chocar con la barra de iconos */}
           <span className="hidden text-sm font-bold uppercase tracking-[0.18em] min-[380px]:inline">Earth</span>
           <span className="hidden text-sm font-light text-glass-muted sm:inline">Jukebox</span>
         </Link>
