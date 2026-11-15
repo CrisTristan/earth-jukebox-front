@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
 import { MascotProvider } from "@/components/mascot/mascot-context";
+import { VoiceProvider } from "@/components/voice/voice-context";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -30,7 +31,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${manrope.variable} ${instrumentSerif.variable} antialiased`}>
       <body>
-        <MascotProvider>{children}</MascotProvider>
+        <VoiceProvider>
+          <MascotProvider>{children}</MascotProvider>
+        </VoiceProvider>
       </body>
     </html>
   );

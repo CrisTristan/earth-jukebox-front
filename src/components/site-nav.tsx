@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 import { AudioWaveform } from "lucide-react";
 import { useMascot } from "@/components/mascot/mascot-context";
+import { useVoice } from "@/components/voice/voice-context";
 
 /** Rutas principales del sitio. Añade aquí nuevas secciones. */
 export const NAV_LINKS = [
@@ -18,10 +20,28 @@ const LINK_BASE =
 const LINK_ON = "text-white after:scale-x-100";
 const LINK_OFF = "text-white/55 hover:text-white after:scale-x-0";
 
-/** Barra superior fija, de lado a lado, con el logo a la izquierda y los enlaces a la derecha. */
+/**
+ * Barra superior fija, de lado a lado, con el logo a la izquierda y los enlaces a la derecha.
+ *
+ * En rutas dinámicas la ruta actual solo se conoce al pedir la página, así que el
+ * enlace activo se resuelve dentro de un `<Suspense>`; mientras tanto se muestra
+ * la misma barra sin enlace activo.
+ */
 export function SiteNav() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<SiteNavBar pathname={null} />}>
+      <CurrentSiteNav />
+    </Suspense>
+  );
+}
+
+function CurrentSiteNav() {
+  return <SiteNavBar pathname={usePathname()} />;
+}
+
+function SiteNavBar({ pathname }: { pathname: string | null }) {
   const mascot = useMascot();
+  const voice = useVoice();
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/45 backdrop-blur-xl">
@@ -57,6 +77,17 @@ export function SiteNav() {
                 className={`${LINK_BASE} ${mascot.visible ? LINK_ON : LINK_OFF}`}
               >
                 Mascota
+              </button>
+            </li>
+            {/* Interruptor de la guía por voz */}
+            <li>
+              <button
+                type="button"
+                onClick={voice.toggle}
+                aria-pressed={voice.enabled}
+                className={`${LINK_BASE} ${voice.enabled ? LINK_ON : LINK_OFF}`}
+              >
+                Voice
               </button>
             </li>
           </ul>
