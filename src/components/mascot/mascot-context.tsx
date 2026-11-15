@@ -23,6 +23,6 @@ export function MascotProvider({ children }: { children: ReactNode }) {
 
 export function useMascot() {
   const context = useContext(MascotContext);
-  if (!context) throw new Error("useMascot debe usarse dentro de <MascotProvider>");
+  if (!context) throw new Error("useMascot must be used inside <MascotProvider>");
   return context;
 }

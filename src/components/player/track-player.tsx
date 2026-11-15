@@ -14,9 +14,10 @@ import { useVoice } from "@/components/voice/voice-context";
 import { VoiceSettings } from "@/components/voice/voice-settings";
 import { usePlayback } from "@/hooks/use-playback";
 import { loadCountries, placeAt, type CountryShape } from "@/lib/geo/places";
+import { globeAt, hasGlobeCameras } from "@/lib/geo/globe";
 import { containedRect, toGeo } from "@/lib/geo/projection";
 import { SECONDS_PER_FRAME, type PlayerData, type PlayerMeter } from "@/lib/player";
-import { bgStyle } from "@/lib/theme";
+import { themeStyle } from "@/lib/theme";
 
 /** Opciones del menú de sonido (solo interfaz, sin audio). */
 const LAYER_MODES = ["Nature + music", "Nature only", "Music only"] as const;
@@ -134,8 +135,15 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     };
   }, []);
 
-  /** Punto de pantalla → lon/lat sobre el frame actual, o null si cae fuera del mapa. */
-  const geoAt = (x: number, y: number) => {
+  /** En los globos la cámara se mueve: cada frame tiene su cámara calibrada. */
+  const globe = hasGlobeCameras(track.slug);
+
+  /**
+   * Punto de pantalla → lon/lat sobre el frame actual, o null si cae fuera de la
+   * imagen. En un globo, `"space"` si cae fuera del planeta y `"unknown"` si el
+   * frame no tiene cámara.
+   */
+  const geoAt = (x: number, y: number): { lon: number; lat: number } | "space" | "unknown" | null => {
     const img = stageRef.current?.querySelector("img");
     if (!img) return null;
     // El padding cambia según el ancho (0 en móvil, `md:p-6` en escritorio).
@@ -149,7 +157,8 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     rafRef.current = 0;
     const p = pointerRef.current;
     if (!p || !cursorRef.current) return;
-    cursorRef.current.style.opacity = geoAt(p.x, p.y) ? "1" : "0.45";
+    const geo = geoAt(p.x, p.y);
+    cursorRef.current.style.opacity = typeof geo === "object" && geo ? "1" : "0.45";
   };
 
   const onStageMove = (e: React.PointerEvent<HTMLElement>) => {
@@ -173,14 +182,18 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     const geo = geoAt(e.clientX, e.clientY);
     if (!geo) return;
     const countries = countriesRef.current;
-    const text = countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
+    const text = geo === "space"
+      ? "Space, outside the planet."
+      : geo === "unknown"
+        ? "Place names are not available for this frame."
+        : countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
     setAnnouncement(text);
     voice.sayOnMap(text);
   };
 
   return (
-    <div className="relative min-h-screen font-sans text-glass overflow-hidden">
-      <div className="jb-bg" style={bgStyle} />
+    <div className="relative min-h-screen font-sans text-glass overflow-hidden" style={themeStyle(track.profileId)}>
+      <div className="jb-bg" />
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <Announce
         text={`Now playing ${track.title}, from the playlist ${playlist.title}. Click the map to hear the name of the place. Use the Map voice switch, or press M, to turn that on or off.`}
@@ -207,7 +220,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               ))}
             </nav>
             <p className="mt-6 mb-3 px-3 text-xs uppercase tracking-widest text-glass-muted">Frames</p>
-            <div data-voice-section="Frames list" className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            <div data-voice-section="Frames list" className="jb-scroll min-h-0 flex-1 space-y-1 overflow-y-auto pr-1.5">
               {frames.map((f, i) => {
                 const lead = meters[0];
                 const leadValue = lead ? f.features[lead.feature] : undefined;
@@ -274,11 +287,11 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
                 <p className="font-display text-3xl md:text-5xl">{track.title}</p>
               </div>
               {frame && meters.length > 0 && (
-                <div className="hidden sm:flex items-end gap-3 text-[10px] uppercase tracking-widest text-glass-muted" aria-hidden>
+                <div className="hidden shrink-0 sm:flex items-end gap-4 text-[10px] uppercase tracking-widest text-glass-muted" aria-hidden>
                   {meters.map((m) => (
-                    <div key={m.feature} className="flex w-14 flex-col items-center gap-1 text-center">
-                      <div className="flex h-10 w-2 items-end overflow-hidden rounded-full bg-white/15">
-                        <span className="w-full rounded-full bg-white/85 transition-all duration-700" style={{ height: `${8 + norm(m, frame.features[m.feature]) * 92}%` }} />
+                    <div key={m.feature} className="flex w-16 flex-col items-center gap-1.5 text-center">
+                      <div className="flex h-9 w-1.5 items-end overflow-hidden rounded-full bg-white/10">
+                        <span className="w-full rounded-full bg-[var(--accent)] transition-all duration-700" style={{ height: `${8 + norm(m, frame.features[m.feature]) * 92}%` }} />
                       </div>
                       <span className="line-clamp-2 leading-tight">{m.label}</span>
                     </div>

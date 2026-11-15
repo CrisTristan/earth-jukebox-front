@@ -36,6 +36,8 @@ export interface PlayerData {
     slug: string;
     title: string;
     description: string | null;
+    /** Perfil del motor (`source_metadata.profile_id`): decide los colores del fondo. */
+    profileId: string | null;
     source: string | null;
     topic: string | null;
     unit: string | null;
@@ -117,6 +119,7 @@ export function toPlayerData(playlist: PlaylistDetail, track: TrackDetail): Play
       slug: track.slug,
       title: track.title,
       description: track.description,
+      profileId: str(track.source_metadata.profile_id),
       source: str(track.source_metadata.source) ?? str(engine.source),
       topic: str(track.source_metadata.topic) ?? str(engine.topic),
       unit: str(engine.unit),

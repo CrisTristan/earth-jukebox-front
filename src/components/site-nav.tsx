@@ -77,7 +77,7 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
                 aria-pressed={mascot.visible}
                 className={`${LINK_BASE} ${mascot.visible ? LINK_ON : LINK_OFF}`}
               >
-                Mascota
+                Mascot
               </button>
             </li>
             {/* Selector de la guía por voz (Off · Full guide) */}
