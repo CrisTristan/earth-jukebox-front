@@ -26,9 +26,8 @@ El código fuente está en `src/app/`.
 
 El front lee las playlists y tracks de la API desde Server Components (`src/lib/api/`).
 
-| Variable  | Por defecto             | Uso                                   |
-|-----------|-------------------------|---------------------------------------|
-| `API_URL` | `http://localhost:8000` | URL base de la API (sin `/api/v1`)    |
+La API es fija, la de producción: `https://api.earth-jukebox.space/api/v1`
+(`API_URL` en `src/lib/api/client.ts`). No hace falta configurar variables de entorno.
 
 Rutas:
 

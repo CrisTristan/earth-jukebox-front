@@ -7,7 +7,8 @@ import { GLOBE_CAMERAS, GLOBE_VFOV } from "@/lib/geo/globe-cameras";
 
 export type GlobeHit = { lon: number; lat: number } | "space";
 
-const frameKey = (frameId: string) => frameId.replace(/\.[a-z0-9]+$/i, "");
+/** Quita solo extensiones de imagen: hay claves con puntos, como `frame_000_t0000.00s`. */
+const frameKey = (frameId: string) => frameId.replace(/\.(png|tiff?|webp|jpe?g)$/i, "");
 
 /** ¿Hay cámaras calibradas para este track? */
 export const hasGlobeCameras = (trackSlug: string) => trackSlug in GLOBE_CAMERAS;
