@@ -20,12 +20,12 @@ export interface SourceMetadata {
   source?: string;
   profile_id?: string;
   topic?: string;
-  /** Nombre de la carpeta de frames en el backend (no es una URL). */
+  /** Carpeta de frames: `public/data_ingest_resources/<frames_directory>/`. */
   frames_directory?: string;
   frame_count?: number;
-  /** Ruta pública de la carpeta de imágenes, p. ej. "/frames/ndvi-vegetation-2024". */
+  /** Ruta pública de la carpeta de imágenes, si no es `/data_ingest_resources/<frames_directory>`. */
   frames_base_url?: string;
-  /** Extensión de las imágenes públicas si difiere de la de `frame_id`. */
+  /** Extensión de las imágenes públicas; por defecto "webp". */
   frames_extension?: string;
   [key: string]: unknown;
 }
@@ -54,7 +54,7 @@ export interface FrameTopRegion {
 
 export interface Frame {
   frame_index: number;
-  /** Nombre del archivo de la imagen, p. ej. "frame_2024-01-01.webp". */
+  /** Nombre del archivo, p. ej. "frame_2024-01-01.png" (en `public/` es ".webp"). */
   frame_id: string;
   date?: string;
   features?: Record<string, number>;

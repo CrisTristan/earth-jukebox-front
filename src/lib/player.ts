@@ -12,7 +12,7 @@ export const SECONDS_PER_FRAME = 4;
 export interface PlayerFrame {
   /** `frame_id` de la API (nombre del archivo). */
   id: string;
-  /** `frames_base_url + "/" + frame_id`. */
+  /** `/data_ingest_resources/<frames_directory>/<frame_id>.webp` (ver `frameUrl`). */
   url: string;
   /** "Jan 2024" si el frame trae fecha; si no, "Frame 3". */
   label: string;

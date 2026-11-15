@@ -38,16 +38,16 @@ Rutas:
 
 ### Imágenes de los frames
 
-Las imágenes viven en `public/frames/<slug-de-la-track>/` y la URL de cada frame es
-`frames_base_url + "/" + frame_id`. Si la track no trae `source_metadata.frames_base_url`,
-se usa `/frames/<slug>`. Al ingestar en el backend conviene pasar `--frames-url /frames/<slug>`.
+Las imágenes viven en `public/data_ingest_resources/<frames_directory>/` (la fuente de verdad),
+donde `frames_directory` viene de `source_metadata` de cada track. La API lista los frames
+con extensión `.png`/`.tif`, pero en `public/` son `.webp`, así que la URL de cada frame es:
 
-Para copiar las imágenes del backend al front (solo las que lista la API):
-
-```bash
-pnpm sync:frames
-# opciones: --api http://localhost:8000 --backend ../spotiearth-backend/app/test_images
 ```
+/data_ingest_resources/<frames_directory>/<frame_id sin extensión>.webp
+```
+
+Si la track trae `source_metadata.frames_base_url` se usa esa carpeta en su lugar. El
+`cover_url` de las playlists se normaliza igual (ruta absoluta y `.webp`). Ver `src/lib/api/frames.ts`.
 
 ## Voz y sonido (accesibilidad)
 

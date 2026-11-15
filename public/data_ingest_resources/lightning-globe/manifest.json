@@ -1,0 +1,186 @@
+{
+  "source_file": "iss_lightning_sphere_07312023.mp4",
+  "generated_at": "2026-11-14T22:21:54.169Z",
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "duration_seconds": 216.7
+  },
+  "section": {
+    "start_seconds": 0,
+    "end_seconds": 216.7
+  },
+  "frame_size": {
+    "width": 1045,
+    "height": 1052
+  },
+  "crop": {
+    "x": 449,
+    "y": 15,
+    "w": 1045,
+    "h": 1052
+  },
+  "frames_count": 32,
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "time_seconds": 0
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "time_seconds": 6.989
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "time_seconds": 13.9781
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "time_seconds": 20.9671
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "time_seconds": 27.9561
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "time_seconds": 34.9452
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "time_seconds": 41.9342
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "time_seconds": 48.9232
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "time_seconds": 55.9123
+    },
+    {
+      "file": "frame_009.png",
+      "index": 9,
+      "time_seconds": 62.9013
+    },
+    {
+      "file": "frame_010.png",
+      "index": 10,
+      "time_seconds": 69.8903
+    },
+    {
+      "file": "frame_011.png",
+      "index": 11,
+      "time_seconds": 76.8794
+    },
+    {
+      "file": "frame_012.png",
+      "index": 12,
+      "time_seconds": 83.8684
+    },
+    {
+      "file": "frame_013.png",
+      "index": 13,
+      "time_seconds": 90.8574
+    },
+    {
+      "file": "frame_014.png",
+      "index": 14,
+      "time_seconds": 97.8465
+    },
+    {
+      "file": "frame_015.png",
+      "index": 15,
+      "time_seconds": 104.8355
+    },
+    {
+      "file": "frame_016.png",
+      "index": 16,
+      "time_seconds": 111.8245
+    },
+    {
+      "file": "frame_017.png",
+      "index": 17,
+      "time_seconds": 118.8135
+    },
+    {
+      "file": "frame_018.png",
+      "index": 18,
+      "time_seconds": 125.8026
+    },
+    {
+      "file": "frame_019.png",
+      "index": 19,
+      "time_seconds": 132.7916
+    },
+    {
+      "file": "frame_020.png",
+      "index": 20,
+      "time_seconds": 139.7806
+    },
+    {
+      "file": "frame_021.png",
+      "index": 21,
+      "time_seconds": 146.7697
+    },
+    {
+      "file": "frame_022.png",
+      "index": 22,
+      "time_seconds": 153.7587
+    },
+    {
+      "file": "frame_023.png",
+      "index": 23,
+      "time_seconds": 160.7477
+    },
+    {
+      "file": "frame_024.png",
+      "index": 24,
+      "time_seconds": 167.7368
+    },
+    {
+      "file": "frame_025.png",
+      "index": 25,
+      "time_seconds": 174.7258
+    },
+    {
+      "file": "frame_026.png",
+      "index": 26,
+      "time_seconds": 181.7148
+    },
+    {
+      "file": "frame_027.png",
+      "index": 27,
+      "time_seconds": 188.7039
+    },
+    {
+      "file": "frame_028.png",
+      "index": 28,
+      "time_seconds": 195.6929
+    },
+    {
+      "file": "frame_029.png",
+      "index": 29,
+      "time_seconds": 202.6819
+    },
+    {
+      "file": "frame_030.png",
+      "index": 30,
+      "time_seconds": 209.671
+    },
+    {
+      "file": "frame_031.png",
+      "index": 31,
+      "time_seconds": 216.66
+    }
+  ]
+}

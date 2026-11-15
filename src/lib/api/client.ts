@@ -6,7 +6,7 @@
  * pedir la misma track para la portada y para el reproductor cuesta una sola
  * petición.
  */
-import { frameUrl } from "@/lib/api/frames";
+import { frameUrl, publicImageUrl } from "@/lib/api/frames";
 import type { PlaylistDetail, PlaylistSummary, TrackDetail, TrackSummary } from "@/lib/api/types";
 
 export const API_URL = (process.env.API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
@@ -53,7 +53,7 @@ export async function getTrackCover(track: TrackSummary): Promise<string | null>
 
 /** Portada de una playlist: `cover_url` o, si no hay, la portada de su primera track. */
 export async function getPlaylistCover(playlist: PlaylistSummary): Promise<string | null> {
-  if (playlist.cover_url) return playlist.cover_url;
+  if (playlist.cover_url) return publicImageUrl(playlist.cover_url);
   const detail = await getPlaylist(playlist.slug);
   const first = detail?.tracks[0];
   return first ? getTrackCover(first) : null;
