@@ -81,6 +81,8 @@ export interface EngineMetadata {
   topic?: string;
   source?: string;
   kind?: string;
+  /** Proyección de los frames: "equirectangular" (mapa 2:1) o "globe" (ya es una esfera). */
+  projection?: string;
   unit?: string;
   /** Latitudes del borde superior e inferior del mapa. */
   lat_range?: [number, number];

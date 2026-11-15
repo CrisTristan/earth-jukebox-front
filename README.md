@@ -35,6 +35,7 @@ Rutas:
 - `/`: playlists de `GET /api/v1/playlists`; la portada es `cover_url` o el primer frame de su primera track.
 - `/playlists/[slug]`: detalle de la playlist (`GET /api/v1/playlists/{slug}`), cada track con su imagen.
 - `/playlists/[slug]/[track]`: reproductor con todos los frames de `GET /api/v1/tracks/{slug}`.
+- `/globo`: tracks que se pueden ver desde dentro del globo; `/globo/[slug]/[track]` es el globo de una track (ver abajo).
 
 ### Imágenes de los frames
 
@@ -48,6 +49,32 @@ con extensión `.png`/`.tif`, pero en `public/` son `.webp`, así que la URL de 
 
 Si la track trae `source_metadata.frames_base_url` se usa esa carpeta en su lugar. El
 `cover_url` de las playlists se normaliza igual (ruta absoluta y `.webp`). Ver `src/lib/api/frames.ts`.
+
+## Globo interior (`/globo`)
+
+Con [three.js](https://threejs.org): la cámara está en el centro de una esfera y los frames
+de la track se reproducen sobre ella en secuencia, con un fundido de 1 s entre uno y otro
+(sin fundido si el sistema pide reducir el movimiento).
+
+- Solo aparecen las tracks con `engine_metadata.projection = "equirectangular"` (mapas 2:1).
+  Las de `"globe"` ya son una esfera vista desde fuera y se ven solo en el reproductor, que
+  muestra el botón del globo (🌐) cuando la track es compatible.
+- **Escritorio**: arrastrar para mirar alrededor, rueda para el zoom. Teclado: ←/→ frame,
+  ↑/↓ inclinar, +/− zoom, Espacio reproducir/pausar, R recentrar.
+- **Móvil**: arrastrar o pellizcar; "Enable motion" usa el giroscopio (en iPhone pide
+  permiso) y "Recenter" toma como frente la dirección a la que apunta el teléfono. El
+  navegador solo da el sensor en HTTPS: para probarlo en el teléfono, `pnpm dev --experimental-https`.
+
+Código:
+
+| Ruta | Qué hace |
+|---|---|
+| `src/lib/globe/globe-scene.ts` | `GlobeScene`: renderer, cámara, bucle (solo pinta si algo cambia) y limpieza. Sin React. |
+| `src/lib/globe/frame-sequence.ts` | Carga los frames en una ventana deslizante (el actual y los 3 siguientes) y libera el resto: la memoria no crece con la longitud de la secuencia. |
+| `src/lib/globe/crossfade-material.ts` | Shader que funde un frame con el siguiente. |
+| `src/lib/globe/sphere.ts` | Esfera interior a partir de `lat_range`/`lon_range` (un mapa parcial cae en su sitio). |
+| `src/lib/globe/controls/` | Controles de cámara (`drag`, `orientation`) con una interfaz común; un modo nuevo se registra en `createControls`. |
+| `src/components/globe/` | `GlobeViewer` (carga three.js con `import()`) y `GlobePlayer` (interfaz y reproducción). |
 
 ## Voz y sonido (accesibilidad)
 

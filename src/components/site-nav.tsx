@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
-import { AudioWaveform, BookOpen, House, Satellite, Smile, Users, Workflow } from "lucide-react";
+import { AudioWaveform, BookOpen, Globe, House, Satellite, Smile, Users, Workflow } from "lucide-react";
 import { useMascot } from "@/components/mascot/mascot-context";
 import { useVoice } from "@/components/voice/voice-context";
 import { VoiceSettings } from "@/components/voice/voice-settings";
@@ -13,6 +13,7 @@ export const NAV_LINKS = [
   { href: "/", label: "Home", icon: House },
   { href: "/how-it-works", label: "How it works", icon: Workflow },
   { href: "/nasa-data", label: "NASA Data", icon: Satellite },
+  { href: "/globo", label: "Globe", icon: Globe },
   { href: "/references", label: "References", icon: BookOpen },
   { href: "/our-team", label: "Our Team", icon: Users },
 ] as const;

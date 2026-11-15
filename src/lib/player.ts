@@ -5,6 +5,7 @@
  */
 import { frameUrl } from "@/lib/api/frames";
 import type { PlaylistDetail, TrackDetail } from "@/lib/api/types";
+import { globePath, isGlobeTrack } from "@/lib/globe/routes";
 
 /** Segundos que se muestra cada frame durante la reproducción. */
 export const SECONDS_PER_FRAME = 4;
@@ -52,11 +53,14 @@ export interface PlayerData {
   };
   frames: PlayerFrame[];
   meters: PlayerMeter[];
+  /** Ruta del globo interior para esta track, o null si sus frames no son un mapa 2:1. */
+  globeHref: string | null;
 }
 
 const MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
-function frameLabel(date: string | undefined, index: number): string {
+/** "Jan 2024" si hay fecha válida; si no, "Frame 3". */
+export function frameLabel(date: string | undefined, index: number): string {
   if (date) {
     const d = new Date(`${date}T00:00:00Z`);
     if (!Number.isNaN(d.getTime())) return MONTH.format(d);
@@ -64,10 +68,10 @@ function frameLabel(date: string | undefined, index: number): string {
   return `Frame ${index + 1}`;
 }
 
-const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+export const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
 /** `[a, b]` numérico o null. */
-function pair(v: unknown): [number, number] | null {
+export function pair(v: unknown): [number, number] | null {
   return Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number" && Number.isFinite(n))
     ? [v[0] as number, v[1] as number]
     : null;
@@ -132,5 +136,6 @@ export function toPlayerData(playlist: PlaylistDetail, track: TrackDetail): Play
     },
     frames,
     meters,
+    globeHref: isGlobeTrack(track) ? globePath(playlist.slug, track.slug) : null,
   };
 }
