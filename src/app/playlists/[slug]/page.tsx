@@ -4,25 +4,32 @@ import { Suspense } from "react";
 import { ArrowLeft, Play } from "lucide-react";
 import { ApiErrorNotice } from "@/components/api-error-notice";
 import { CoverImage, CoverSkeleton } from "@/components/cover-image";
-import { PageShell } from "@/components/page-shell";
+import { PageShell, ThemedBackground } from "@/components/page-shell";
 import { Announce } from "@/components/voice/announce";
 import { getPlaylist, getPlaylistCover, getTrackCover } from "@/lib/api/client";
+import { playlistProfile } from "@/lib/theme";
 import type { PlaylistDetail, TrackSummary } from "@/lib/api/types";
 
-const TRACK_COVER = "aspect-[2/1] w-28 shrink-0 rounded-xl sm:w-40";
-const HERO_COVER = "aspect-[2/1] w-full rounded-3xl md:w-96";
+const TRACK_COVER = "aspect-[2/1] w-28 shrink-0 rounded-lg sm:w-40";
+const HERO_COVER = "aspect-[2/1] w-full rounded-xl ring-1 ring-white/10 md:w-96";
 
 export default function PlaylistPage({ params }: PageProps<"/playlists/[slug]">) {
   return (
-    <PageShell>
-      <Link href="/" className="glass-light inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm">
-        <ArrowLeft className="h-4 w-4" /> All playlists
+    <PageShell background={<Suspense fallback={null}><PlaylistBackground params={params} /></Suspense>}>
+      <Link href="/" className="group inline-flex items-center gap-2 text-sm text-glass-muted transition hover:text-glass">
+        <ArrowLeft className="h-4 w-4 transition group-hover:-translate-x-0.5" /> All playlists
       </Link>
       <Suspense fallback={<PlaylistSkeleton />}>
         <PlaylistView params={params} />
       </Suspense>
     </PageShell>
   );
+}
+
+/** Fondo con los colores del track principal de la playlist; sale del slug, sin esperar a la API. */
+async function PlaylistBackground({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  return <ThemedBackground profile={playlistProfile(slug)} />;
 }
 
 async function PlaylistView({ params }: { params: Promise<{ slug: string }> }) {
@@ -54,9 +61,9 @@ async function PlaylistView({ params }: { params: Promise<{ slug: string }> }) {
 
       <h2 className="mt-14 mb-4 text-sm uppercase tracking-widest text-glass-muted">Tracks</h2>
       {tracks.length === 0 ? (
-        <p className="glass rounded-3xl p-6 text-glass-muted">This playlist has no tracks yet.</p>
+        <p className="border-y border-white/10 py-6 text-glass-muted">This playlist has no tracks yet.</p>
       ) : (
-        <ol data-voice-section="Tracks list" className="space-y-3">
+        <ol data-voice-section="Tracks list" className="divide-y divide-white/10 border-y border-white/10">
           {tracks.map((track, i) => (
             <li key={track.id}>
               <TrackRow playlistSlug={playlist.slug} track={track} index={i} />
@@ -92,20 +99,20 @@ function TrackRow({ playlistSlug, track, index }: { playlistSlug: string; track:
   const meta = track.source_metadata;
   const details = [meta.frame_count != null && `${meta.frame_count} frames`, meta.source].filter(Boolean).join(" · ");
   return (
-    <Link href={`/playlists/${playlistSlug}/${track.slug}`}
-      className="glass group flex items-center gap-4 rounded-3xl p-3 transition hover:bg-white/20 sm:gap-5">
+    <Link href={`/playlists/${playlistSlug}/${track.slug}`} data-bg-theme={meta.profile_id ?? undefined}
+      className="group flex items-center gap-4 rounded-lg px-2 py-4 transition hover:bg-white/[0.06] sm:gap-5">
       <span className="hidden w-6 text-center text-sm tabular-nums text-glass-muted sm:block">{index + 1}</span>
-      <div className="overflow-hidden rounded-xl">
+      <div className="overflow-hidden rounded-lg">
         <Suspense fallback={<CoverSkeleton className={TRACK_COVER} />}>
           <TrackCover track={track} />
         </Suspense>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold">{track.title}</p>
+        <p className="truncate font-display text-2xl leading-tight">{track.title}</p>
         {track.description && <p className="mt-0.5 line-clamp-2 text-sm text-glass-muted">{track.description}</p>}
         {details && <p className="mt-1 truncate text-xs text-glass-muted">{details}</p>}
       </div>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-black shadow-lg transition group-hover:scale-105" aria-hidden>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black transition group-hover:scale-105" aria-hidden>
         <Play className="ml-0.5 h-4 w-4 fill-current" />
       </span>
     </Link>
@@ -123,7 +130,7 @@ function PlaylistSkeleton() {
         </div>
       </div>
       <div className="mt-14 space-y-3">
-        {[0, 1, 2].map((i) => <CoverSkeleton key={i} className="h-24 rounded-3xl" />)}
+        {[0, 1, 2].map((i) => <CoverSkeleton key={i} className="h-24 rounded-lg" />)}
       </div>
     </div>
   );

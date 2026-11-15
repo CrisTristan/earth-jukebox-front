@@ -2,19 +2,30 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ApiErrorNotice } from "@/components/api-error-notice";
 import { CoverSkeleton } from "@/components/cover-image";
-import { PageShell } from "@/components/page-shell";
+import { PageShell, ThemedBackground } from "@/components/page-shell";
 import { TrackPlayer } from "@/components/player/track-player";
 import { getPlaylist, getTrack } from "@/lib/api/client";
 import type { PlaylistDetail, TrackDetail } from "@/lib/api/types";
 import { toPlayerData } from "@/lib/player";
-import { bgStyle } from "@/lib/theme";
+import { profileFromTrackSlug } from "@/lib/theme";
 
 export default function TrackPage({ params }: PageProps<"/playlists/[slug]/[track]">) {
   return (
-    <Suspense fallback={<PlayerSkeleton />}>
-      <TrackLoader params={params} />
-    </Suspense>
+    <>
+      <Suspense fallback={<PlayerSkeleton />}>
+        <TrackLoader params={params} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <TrackBackground params={params} />
+      </Suspense>
+    </>
   );
+}
+
+/** Colores del track desde su slug, para no mostrar el fondo por defecto mientras carga. */
+async function TrackBackground({ params }: { params: Promise<{ slug: string; track: string }> }) {
+  const { track } = await params;
+  return <ThemedBackground profile={profileFromTrackSlug(track)} />;
 }
 
 async function TrackLoader({ params }: { params: Promise<{ slug: string; track: string }> }) {
@@ -34,7 +45,6 @@ async function TrackLoader({ params }: { params: Promise<{ slug: string; track: 
 function PlayerSkeleton() {
   return (
     <div className="relative min-h-screen overflow-hidden" aria-busy="true" aria-label="Loading track">
-      <div className="jb-bg" style={bgStyle} />
       <div className="flex h-screen flex-col gap-4 p-4">
         <div className="flex min-h-0 flex-1 gap-4">
           <CoverSkeleton className="hidden md:block w-1/4 max-w-xs rounded-3xl" />

@@ -5,8 +5,9 @@ import { ApiErrorNotice } from "@/components/api-error-notice";
 import { CoverImage, CoverSkeleton } from "@/components/cover-image";
 import { getPlaylistCover, getPlaylists } from "@/lib/api/client";
 import type { PlaylistSummary } from "@/lib/api/types";
+import { playlistProfile } from "@/lib/theme";
 
-const COVER_CLASS = "aspect-[2/1] w-full rounded-2xl transition-transform duration-700 group-hover:scale-105";
+const COVER_CLASS = "aspect-[2/1] w-full transition-transform duration-700 group-hover:scale-[1.03]";
 
 async function PlaylistCover({ playlist }: { playlist: PlaylistSummary }) {
   let src: string | null = null;
@@ -20,14 +21,14 @@ async function PlaylistCover({ playlist }: { playlist: PlaylistSummary }) {
 
 function PlaylistCard({ playlist }: { playlist: PlaylistSummary }) {
   return (
-    <Link href={`/playlists/${playlist.slug}`}
-      className="glass group flex flex-col gap-4 rounded-3xl p-4 transition-all duration-500 hover:scale-[1.01] hover:bg-white/20">
-      <div className="overflow-hidden rounded-2xl">
+    <Link href={`/playlists/${playlist.slug}`} data-bg-theme={playlistProfile(playlist.slug) ?? undefined}
+      className="group flex flex-col gap-4 rounded-xl outline-offset-4">
+      <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
         <Suspense fallback={<CoverSkeleton className={COVER_CLASS} />}>
           <PlaylistCover playlist={playlist} />
         </Suspense>
       </div>
-      <div className="flex items-start justify-between gap-4 px-1 pb-1">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-xs uppercase tracking-widest text-glass-muted">
             {playlist.category}
@@ -58,7 +59,7 @@ export async function PlaylistGrid() {
   }
 
   return (
-    <div data-voice-section="Playlists list" className="grid gap-4 md:grid-cols-2">
+    <div data-voice-section="Playlists list" className="grid gap-x-8 gap-y-12 md:grid-cols-2">
       {playlists.map((p) => (
         <PlaylistCard key={p.id} playlist={p} />
       ))}
@@ -68,12 +69,12 @@ export async function PlaylistGrid() {
 
 export function PlaylistGridSkeleton() {
   return (
-    <div className="grid gap-4 md:grid-cols-2" aria-busy="true" aria-label="Loading playlists">
+    <div className="grid gap-x-8 gap-y-12 md:grid-cols-2" aria-busy="true" aria-label="Loading playlists">
       {[0, 1].map((i) => (
-        <div key={i} className="glass flex flex-col gap-4 rounded-3xl p-4">
-          <CoverSkeleton className="aspect-[2/1] w-full rounded-2xl" />
-          <CoverSkeleton className="mx-1 h-4 w-24 rounded-full" />
-          <CoverSkeleton className="mx-1 mb-2 h-8 w-2/3 rounded-full" />
+        <div key={i} className="flex flex-col gap-4">
+          <CoverSkeleton className="aspect-[2/1] w-full rounded-xl" />
+          <CoverSkeleton className="h-4 w-24 rounded-full" />
+          <CoverSkeleton className="h-8 w-2/3 rounded-full" />
         </div>
       ))}
     </div>

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useMascot } from "@/components/mascot/mascot-context";
 
 // Provisional: por ahora la mascota sólo saluda
-const GREETING = "¡Hola! Soy la mascota de Earth Jukebox. Pronto te contaré qué estás escuchando.";
+const GREETING = "Hi! I'm the Earth Jukebox mascot. Soon I'll tell you what you're listening to.";
 
 function MascotDock() {
   const [greeting, setGreeting] = useState(false);
@@ -28,7 +28,7 @@ function MascotDock() {
         hidden={!greeting}
         className="glass-strong pointer-events-auto max-w-64 rounded-2xl p-4"
       >
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400">Mascota</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400">Mascot</p>
         <p className="mt-2 text-sm leading-relaxed text-glass-muted">{GREETING}</p>
       </div>
 
@@ -37,7 +37,7 @@ function MascotDock() {
         onClick={() => setGreeting((open) => !open)}
         aria-expanded={greeting}
         aria-controls="mascot-greeting"
-        aria-label={greeting ? "Ocultar el saludo de la mascota" : "Saludar a la mascota"}
+        aria-label={greeting ? "Hide the mascot's greeting" : "Say hi to the mascot"}
         className="pointer-events-auto rounded-full transition-transform duration-300 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-400"
       >
         <Image

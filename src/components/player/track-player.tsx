@@ -12,9 +12,10 @@ import { useVoice } from "@/components/voice/voice-context";
 import { VoiceSettings } from "@/components/voice/voice-settings";
 import { usePlayback } from "@/hooks/use-playback";
 import { loadCountries, placeAt, type CountryShape } from "@/lib/geo/places";
+import { globeAt, hasGlobeCameras } from "@/lib/geo/globe";
 import { containedRect, toGeo } from "@/lib/geo/projection";
 import { SECONDS_PER_FRAME, type PlayerData, type PlayerMeter } from "@/lib/player";
-import { bgStyle } from "@/lib/theme";
+import { themeStyle } from "@/lib/theme";
 
 /** Opciones del menú de sonido (solo interfaz, sin audio). */
 const LAYER_MODES = ["Nature + music", "Nature only", "Music only"] as const;
@@ -126,12 +127,23 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     };
   }, []);
 
-  /** Punto de pantalla → lon/lat sobre el frame actual, o null si cae fuera del mapa. */
-  const geoAt = (x: number, y: number) => {
+  /** En los globos la cámara se mueve: cada frame tiene su cámara calibrada. */
+  const globe = hasGlobeCameras(track.slug);
+
+  /**
+   * Punto de pantalla → lon/lat sobre el frame actual, o null si cae fuera de la
+   * imagen. En un globo, `"space"` si cae fuera del planeta y `"unknown"` si el
+   * frame no tiene cámara.
+   */
+  const geoAt = (x: number, y: number): { lon: number; lat: number } | "space" | "unknown" | null => {
     const img = stageRef.current?.querySelector("img");
     if (!img) return null;
     const map = containedRect(img.getBoundingClientRect(), STAGE_PADDING, img.naturalWidth, img.naturalHeight);
-    return toGeo(x, y, map, track.latRange, track.lonRange);
+    if (!globe) return toGeo(x, y, map, track.latRange, track.lonRange);
+    const u = (x - map.left) / map.width;
+    const v = (y - map.top) / map.height;
+    if (!frame || !(u >= 0 && u <= 1 && v >= 0 && v <= 1)) return null;
+    return globeAt(track.slug, frame.id, u, v, map.width / map.height) ?? "unknown";
   };
 
   /** El cursor se atenúa fuera del mapa. */
@@ -139,7 +151,8 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     rafRef.current = 0;
     const p = pointerRef.current;
     if (!p || !cursorRef.current) return;
-    cursorRef.current.style.opacity = geoAt(p.x, p.y) ? "1" : "0.45";
+    const geo = geoAt(p.x, p.y);
+    cursorRef.current.style.opacity = typeof geo === "object" && geo ? "1" : "0.45";
   };
 
   const onStageMove = (e: React.PointerEvent<HTMLElement>) => {
@@ -163,14 +176,18 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     const geo = geoAt(e.clientX, e.clientY);
     if (!geo) return;
     const countries = countriesRef.current;
-    const text = countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
+    const text = geo === "space"
+      ? "Space, outside the planet."
+      : geo === "unknown"
+        ? "Place names are not available for this frame."
+        : countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
     setAnnouncement(text);
     voice.sayOnMap(text);
   };
 
   return (
-    <div className="relative min-h-screen font-sans text-glass overflow-hidden">
-      <div className="jb-bg" style={bgStyle} />
+    <div className="relative min-h-screen font-sans text-glass overflow-hidden" style={themeStyle(track.profileId)}>
+      <div className="jb-bg" />
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <Announce
         text={`Now playing ${track.title}, from the playlist ${playlist.title}. Click the map to hear the name of the place. Use the Map voice switch, or press M, to turn that on or off.`}
@@ -196,7 +213,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               ))}
             </nav>
             <p className="mt-6 mb-3 px-3 text-xs uppercase tracking-widest text-glass-muted">Frames</p>
-            <div data-voice-section="Frames list" className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            <div data-voice-section="Frames list" className="jb-scroll min-h-0 flex-1 space-y-1 overflow-y-auto pr-1.5">
               {frames.map((f, i) => {
                 const lead = meters[0];
                 const leadValue = lead ? f.features[lead.feature] : undefined;
@@ -219,46 +236,52 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
             </div>
           </aside>
 
-          <section ref={stageRef} data-voice-section="Map" onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
-            className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60">
-            {/* Timelapse: todos los frames apilados; el actual se muestra con fundido. */}
-            {frames.map((f, i) => (
-              <img key={f.id} src={f.url}
-                alt={i === current ? `${track.imageLabel ?? track.title}, ${f.label} (frame ${i + 1} of ${frameCount})` : ""}
-                aria-hidden={i !== current}
-                className={`absolute inset-0 h-full w-full object-contain p-6 transition-opacity duration-1000 ${i === current ? "opacity-100" : "opacity-0"}`} />
-            ))}
-            {frameCount === 0 && (
-              <p className="absolute inset-0 grid place-items-center text-glass-muted">This track has no frames.</p>
-            )}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+          <section ref={stageRef} data-voice-section="Map"
+            className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-3xl bg-black/40">
+            <div className="flex items-center justify-between gap-4 border-b border-white/10 px-6 py-3">
+              <p className="flex min-w-0 items-center gap-2 text-xs uppercase tracking-widest text-glass-muted">
+                <span className={`h-2 w-2 shrink-0 rounded-full bg-[var(--accent)] ${playing ? "animate-pulse" : ""}`} />
+                <span className="truncate">Earth Data Timelapse</span>
+                {frame && <span className="shrink-0 normal-case tracking-normal">· {frame.label} · {current + 1}/{frameCount}</span>}
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <MapVoiceSwitch on={voice.mapVoice} onChange={voice.setMapVoice} />
+                <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-full p-2" aria-label="Back to playlist">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Timelapse: todos los frames apilados; el actual se muestra con fundido. Nada se dibuja encima. */}
+            <div onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
+              className="relative min-h-0 flex-1 cursor-none">
+              {frames.map((f, i) => (
+                <img key={f.id} src={f.url}
+                  alt={i === current ? `${track.imageLabel ?? track.title}, ${f.label} (frame ${i + 1} of ${frameCount})` : ""}
+                  aria-hidden={i !== current}
+                  className={`absolute inset-0 h-full w-full object-contain p-6 transition-opacity duration-1000 ${i === current ? "opacity-100" : "opacity-0"}`} />
+              ))}
+              {frameCount === 0 && (
+                <p className="absolute inset-0 grid place-items-center text-glass-muted">This track has no frames.</p>
+              )}
+            </div>
 
             {/* Cursor: círculo pequeño que sigue al ratón sobre el mapa (se mueve sin re-render). */}
             <div ref={cursorRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-20 opacity-0 transition-opacity duration-150 will-change-transform">
               <span ref={cursorDotRef} className="block h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-white/25 shadow-[0_0_0_2px_rgba(0,0,0,0.45)]" />
             </div>
 
-            <div className="pointer-events-none absolute left-6 top-6 glass-light flex items-center gap-2 rounded-full px-4 py-1.5 text-xs uppercase tracking-widest">
-              <span className={`h-2 w-2 rounded-full bg-red-400 ${playing ? "animate-pulse" : ""}`} /> Earth Data Timelapse
-              {frame && <span className="text-glass-muted normal-case tracking-normal">· {frame.label} · {current + 1}/{frameCount}</span>}
-            </div>
-            <div className="absolute right-6 top-6 z-10 flex items-center gap-2">
-              <MapVoiceSwitch on={voice.mapVoice} onChange={voice.setMapVoice} />
-              <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-full p-2" aria-label="Back to playlist">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </div>
-            <div className="pointer-events-none absolute bottom-6 left-6 right-6 flex items-end justify-between gap-4">
+            <div className="flex items-end justify-between gap-6 border-t border-white/10 px-6 py-4">
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-widest text-glass-muted">{playlist.title}</p>
-                <p className="font-display text-4xl md:text-5xl">{track.title}</p>
+                <p className="mt-1 truncate font-display text-3xl leading-tight md:text-4xl">{track.title}</p>
               </div>
               {frame && meters.length > 0 && (
-                <div className="hidden sm:flex items-end gap-3 text-[10px] uppercase tracking-widest text-glass-muted" aria-hidden>
+                <div className="hidden shrink-0 sm:flex items-end gap-4 text-[10px] uppercase tracking-widest text-glass-muted" aria-hidden>
                   {meters.map((m) => (
-                    <div key={m.feature} className="flex w-14 flex-col items-center gap-1 text-center">
-                      <div className="flex h-10 w-2 items-end overflow-hidden rounded-full bg-white/15">
-                        <span className="w-full rounded-full bg-white/85 transition-all duration-700" style={{ height: `${8 + norm(m, frame.features[m.feature]) * 92}%` }} />
+                    <div key={m.feature} className="flex w-16 flex-col items-center gap-1.5 text-center">
+                      <div className="flex h-9 w-1.5 items-end overflow-hidden rounded-full bg-white/10">
+                        <span className="w-full rounded-full bg-[var(--accent)] transition-all duration-700" style={{ height: `${8 + norm(m, frame.features[m.feature]) * 92}%` }} />
                       </div>
                       <span className="line-clamp-2 leading-tight">{m.label}</span>
                     </div>
