@@ -13,6 +13,7 @@ export const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/nasa-data", label: "NASA Data" },
+  { href: "/references", label: "References" },
   { href: "/our-team", label: "Our Team" },
 ] as const;
 

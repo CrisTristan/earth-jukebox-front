@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown, Database, Film, FolderDown, Headphones, Palette, Satellite } from "lucide-react";
 import { CoverImage } from "@/components/cover-image";
+import { ExternalLink } from "@/components/external-link";
 import { SectionPage } from "@/components/section-page";
 import {
   CHALLENGE_RESOURCES,
@@ -253,16 +254,5 @@ function DatasetCard({ dataset: d }: { dataset: Dataset }) {
         </div>
       </div>
     </article>
-  );
-}
-
-/** Enlace externo: se abre en otra pestaña y lo anuncia a lectores de pantalla. */
-function ExternalLink({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-      {children}
-      <span className="sr-only"> (opens in a new tab)</span>
-      <ArrowUpRight aria-hidden className="inline h-3.5 w-3.5 shrink-0" />
-    </a>
   );
 }

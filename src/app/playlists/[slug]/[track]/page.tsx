@@ -45,7 +45,6 @@ async function TrackLoader({ params }: { params: Promise<{ slug: string; track: 
 function PlayerSkeleton() {
   return (
     <div className="relative min-h-screen overflow-hidden" aria-busy="true" aria-label="Loading track">
-      <div className="jb-bg" style={bgStyle} />
       <div className="flex h-dvh flex-col md:gap-4 md:p-4 land:gap-0 land:p-0">
         <div className="flex min-h-0 flex-1 md:gap-4 land:gap-0">
           <CoverSkeleton className="hidden md:block w-1/4 max-w-xs rounded-3xl land:hidden" />
