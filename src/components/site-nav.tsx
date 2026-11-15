@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { AudioWaveform } from "lucide-react";
 import { useMascot } from "@/components/mascot/mascot-context";
 import { useVoice } from "@/components/voice/voice-context";
+import { VoiceSettings } from "@/components/voice/voice-settings";
 
 /** Rutas principales del sitio. Añade aquí nuevas secciones. */
 export const NAV_LINKS = [
@@ -44,7 +45,7 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
   const voice = useVoice();
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/45 backdrop-blur-xl">
+    <header data-voice-section="Top navigation bar" className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/45 backdrop-blur-xl">
       <div className="flex h-16 items-center justify-between gap-6 px-4 md:px-10">
         <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Earth Jukebox — Home">
           <AudioWaveform className="h-5 w-5 text-teal-400" aria-hidden />
@@ -79,16 +80,9 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
                 Mascota
               </button>
             </li>
-            {/* Interruptor de la guía por voz */}
+            {/* Selector de la guía por voz (Off · Full guide) */}
             <li>
-              <button
-                type="button"
-                onClick={voice.toggle}
-                aria-pressed={voice.enabled}
-                className={`${LINK_BASE} ${voice.enabled ? LINK_ON : LINK_OFF}`}
-              >
-                Voice
-              </button>
+              <VoiceSettings variant="nav" className={`${LINK_BASE} ${voice.enabled ? LINK_ON : LINK_OFF}`} />
             </li>
           </ul>
         </nav>

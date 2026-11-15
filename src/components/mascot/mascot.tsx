@@ -22,7 +22,7 @@ function MascotDock() {
   return (
     // Fija al viewport (no la afecta el scroll) y por encima de todo el contenido.
     // Sin tapar nada: sólo la mascota y el globo reciben clics.
-    <div className="pointer-events-none fixed bottom-4 right-0 z-50 flex flex-col items-end gap-3 px-5 md:bottom-6 md:px-8 lg:px-10">
+    <div data-voice-section="Mascot" className="pointer-events-none fixed bottom-4 right-0 z-50 flex flex-col items-end gap-3 px-5 md:bottom-6 md:px-8 lg:px-10">
       <div
         id="mascot-greeting"
         hidden={!greeting}

@@ -6,14 +6,13 @@ import Link from "next/link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, X, AudioWaveform, ChevronRight, Satellite, ListMusic,
-  Megaphone, MegaphoneOff,
 } from "lucide-react";
 import { Announce } from "@/components/voice/announce";
 import { useVoice } from "@/components/voice/voice-context";
+import { VoiceSettings } from "@/components/voice/voice-settings";
 import { usePlayback } from "@/hooks/use-playback";
-import { PointerSonifier } from "@/lib/audio/pointer-sonifier";
 import { loadCountries, placeAt, type CountryShape } from "@/lib/geo/places";
-import { containedRect, gridValue, toGeo } from "@/lib/geo/projection";
+import { containedRect, toGeo } from "@/lib/geo/projection";
 import { SECONDS_PER_FRAME, type PlayerData, type PlayerMeter } from "@/lib/player";
 import { bgStyle } from "@/lib/theme";
 
@@ -28,6 +27,8 @@ const SHORTCUTS = [
   ["← →", "Previous / next frame"],
   ["D", "Describe the current frame"],
   ["Click", "Hear the name of the place on the map"],
+  ["V", "Voice guide on / off"],
+  ["M", "Map voice on / off"],
   ["Esc", "Close panels"],
 ] as const;
 
@@ -55,9 +56,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const stageRef = useRef<HTMLElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const cursorDotRef = useRef<HTMLSpanElement>(null);
-  const sonifierRef = useRef<PointerSonifier | null>(null);
   const countriesRef = useRef<CountryShape[] | null>(null);
-  const lastPlaceRef = useRef<string | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const rafRef = useRef(0);
 
@@ -98,6 +97,8 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     if (k === " " && !onInteractive) {
       e.preventDefault();
       player.toggle();
+    } else if ((k === "m" || k === "M") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+      voice.setMapVoice(!voice.mapVoice);
     } else if (k === "d" || k === "D") {
       setAnnouncement(describe(current));
     } else if (k === "Escape") {
@@ -113,32 +114,17 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // ---- Sonido bajo el puntero y nombres de lugares ----
+  // ---- Nombres de lugares (para el clic en el mapa) ----
   useEffect(() => {
     let alive = true;
     loadCountries()
       .then((c) => { if (alive) countriesRef.current = c; })
-      .catch(() => { /* sin fronteras: solo suena el dato */ });
-
-    const sonifier = new PointerSonifier();
-    sonifierRef.current = sonifier;
-    // El audio solo arranca tras un gesto; si ya hubo uno (navegación desde otra página), arranca ya.
-    const unlock = () => sonifier.unlock();
-    const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
-    if (activation?.hasBeenActive) unlock();
-    window.addEventListener("pointerdown", unlock, true);
-    window.addEventListener("keydown", unlock, true);
+      .catch(() => { /* sin fronteras: el clic avisa de que el mapa no está listo */ });
     return () => {
       alive = false;
-      window.removeEventListener("pointerdown", unlock, true);
-      window.removeEventListener("keydown", unlock, true);
       cancelAnimationFrame(rafRef.current);
-      sonifier.dispose();
-      sonifierRef.current = null;
     };
   }, []);
-  useEffect(() => { sonifierRef.current?.setVolume(vol / 100); }, [vol]);
-  useEffect(() => { sonifierRef.current?.setMuted(layers === "Music only"); }, [layers]);
 
   /** Punto de pantalla → lon/lat sobre el frame actual, o null si cae fuera del mapa. */
   const geoAt = (x: number, y: number) => {
@@ -148,31 +134,12 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     return toGeo(x, y, map, track.latRange, track.lonRange);
   };
 
-  const sonifyPointer = () => {
+  /** El cursor se atenúa fuera del mapa. */
+  const updateCursor = () => {
     rafRef.current = 0;
     const p = pointerRef.current;
-    const sonifier = sonifierRef.current;
-    if (!p || !sonifier) return;
-    const geo = geoAt(p.x, p.y);
-    if (cursorRef.current) cursorRef.current.style.opacity = geo ? "1" : "0.45";
-    if (!geo) {
-      sonifier.silence();
-      lastPlaceRef.current = null;
-      return;
-    }
-    const raw = gridValue(frame?.grid ?? null, geo.u, geo.v);
-    const range = track.valueRange;
-    const level = raw == null ? null : range && range[1] > range[0] ? (raw - range[0]) / (range[1] - range[0]) : raw;
-    sonifier.update({ pan: geo.u * 2 - 1, level });
-
-    const countries = countriesRef.current;
-    if (countries) {
-      const key = placeAt(countries, geo.lon, geo.lat).key;
-      if (key !== lastPlaceRef.current) {
-        if (lastPlaceRef.current !== null) sonifier.tick();
-        lastPlaceRef.current = key;
-      }
-    }
+    if (!p || !cursorRef.current) return;
+    cursorRef.current.style.opacity = geoAt(p.x, p.y) ? "1" : "0.45";
   };
 
   const onStageMove = (e: React.PointerEvent<HTMLElement>) => {
@@ -182,14 +149,12 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       cursorRef.current.style.transform = `translate3d(${e.clientX - rect.left}px, ${e.clientY - rect.top}px, 0)`;
     }
     pointerRef.current = { x: e.clientX, y: e.clientY };
-    rafRef.current ||= requestAnimationFrame(sonifyPointer);
+    rafRef.current ||= requestAnimationFrame(updateCursor);
   };
 
   const onStageLeave = () => {
     if (cursorRef.current) cursorRef.current.style.opacity = "0";
     pointerRef.current = null;
-    lastPlaceRef.current = null;
-    sonifierRef.current?.silence();
   };
 
   const onStageClick = (e: React.MouseEvent<HTMLElement>) => {
@@ -200,7 +165,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     const countries = countriesRef.current;
     const text = countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
     setAnnouncement(text);
-    voice.say(text);
+    voice.sayOnMap(text);
   };
 
   return (
@@ -208,7 +173,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       <div className="jb-bg" style={bgStyle} />
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <Announce
-        text={`Now playing ${track.title}, from the playlist ${playlist.title}. Move the pointer over the map to hear it, and click anywhere to hear the name of the place.`}
+        text={`Now playing ${track.title}, from the playlist ${playlist.title}. Click the map to hear the name of the place. Use the Map voice switch, or press M, to turn that on or off.`}
       />
 
       <div className="jb-enter flex h-screen flex-col gap-4 p-4">
@@ -219,7 +184,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
             </Link>
             <p className="mt-6 text-xs uppercase tracking-widest text-glass-muted">Playlist</p>
             <p className="mt-1 font-display text-3xl leading-tight">{playlist.title}</p>
-            <nav className="mt-4 space-y-1" aria-label="Tracks">
+            <nav className="mt-4 space-y-1" aria-label="Tracks" data-voice-section="Track list">
               <button onClick={() => setInfo(true)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-glass-muted transition hover:bg-white/10 hover:text-glass">
                 <Info className="h-4 w-4" /> Track info
               </button>
@@ -231,7 +196,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               ))}
             </nav>
             <p className="mt-6 mb-3 px-3 text-xs uppercase tracking-widest text-glass-muted">Frames</p>
-            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            <div data-voice-section="Frames list" className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
               {frames.map((f, i) => {
                 const lead = meters[0];
                 const leadValue = lead ? f.features[lead.feature] : undefined;
@@ -254,7 +219,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
             </div>
           </aside>
 
-          <section ref={stageRef} onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
+          <section ref={stageRef} data-voice-section="Map" onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
             className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60">
             {/* Timelapse: todos los frames apilados; el actual se muestra con fundido. */}
             {frames.map((f, i) => (
@@ -277,9 +242,12 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <span className={`h-2 w-2 rounded-full bg-red-400 ${playing ? "animate-pulse" : ""}`} /> Earth Data Timelapse
               {frame && <span className="text-glass-muted normal-case tracking-normal">· {frame.label} · {current + 1}/{frameCount}</span>}
             </div>
-            <Link href={`/playlists/${playlist.slug}`} className="md:hidden absolute right-6 top-6 glass-light rounded-full p-2" aria-label="Back to playlist">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+            <div className="absolute right-6 top-6 z-10 flex items-center gap-2">
+              <MapVoiceSwitch on={voice.mapVoice} onChange={voice.setMapVoice} />
+              <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-full p-2" aria-label="Back to playlist">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </div>
             <div className="pointer-events-none absolute bottom-6 left-6 right-6 flex items-end justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-widest text-glass-muted">{playlist.title}</p>
@@ -301,7 +269,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           </section>
         </div>
 
-        <footer className="glass-strong relative flex h-[10vh] min-h-20 items-center gap-4 rounded-3xl px-4 md:px-6">
+        <footer data-voice-section="Playback controls" className="glass-strong relative flex h-[10vh] min-h-20 items-center gap-4 rounded-3xl px-4 md:px-6">
           <div className="flex w-1/4 min-w-0 items-center gap-3">
             {frame && <img src={frame.url} alt="" className="h-12 w-12 rounded-xl bg-black object-cover" />}
             <div className="hidden sm:block min-w-0">
@@ -339,7 +307,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
                 <AudioWaveform className="h-4 w-4" /> <span className="hidden lg:inline">{synth}</span>
               </button>
               {synthOpen && (
-                <div className="glass-strong jb-enter absolute bottom-14 right-0 w-52 rounded-2xl p-2">
+                <div data-voice-section="Sound settings menu" className="glass-strong jb-enter absolute bottom-14 right-0 w-52 rounded-2xl p-2">
                   <p className="px-3 py-2 text-[10px] uppercase tracking-widest text-glass-muted">Sound</p>
                   {LAYER_MODES.map((m) => (
                     <button key={m} onClick={() => setLayers(m)} aria-pressed={m === layers}
@@ -357,15 +325,13 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <Volume2 className="h-4 w-4 text-glass-muted" />
               <input type="range" min={0} max={100} value={vol} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="h-1 w-20 accent-white" />
             </div>
-            <button onClick={voice.toggle} aria-pressed={voice.enabled} aria-label="Voice guide" title={voice.enabled ? "Voice guide on" : "Voice guide off"} className="glass-light rounded-full p-2">
-              {voice.enabled ? <Megaphone className="h-4 w-4" /> : <MegaphoneOff className="h-4 w-4" />}
-            </button>
+            <VoiceSettings variant="icon" className="glass-light rounded-full p-2" />
             <button onClick={() => setInfo(true)} aria-label="Track info" className="glass-light rounded-full p-2"><Info className="h-4 w-4" /></button>
           </div>
         </footer>
 
         <div onClick={() => setInfo(false)} className={`fixed inset-0 z-40 bg-black/20 transition-opacity duration-500 ${info ? "opacity-100" : "pointer-events-none opacity-0"}`} />
-        <aside aria-hidden={!info} inert={!info} className={`glass-strong fixed bottom-4 right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] overflow-y-auto rounded-3xl p-7 transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${info ? "translate-x-0" : "translate-x-[110%]"}`}>
+        <aside aria-hidden={!info} inert={!info} data-voice-section="Track information panel" className={`glass-strong fixed bottom-4 right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] overflow-y-auto rounded-3xl p-7 transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${info ? "translate-x-0" : "translate-x-[110%]"}`}>
           <button onClick={() => setInfo(false)} aria-label="Close" className="glass-light absolute right-5 top-5 rounded-full p-2"><X className="h-4 w-4" /></button>
           <p className="text-xs uppercase tracking-widest text-glass-muted">Metadata & Science</p>
           <h3 className="mt-2 pr-10 font-display text-4xl leading-tight">{track.title}</h3>
@@ -415,5 +381,24 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+/** Switch "Map voice": decir el nombre del lugar al hacer clic en el mapa. */
+function MapVoiceSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      title="Say the name of the place when you click the map (M)"
+      className="glass-light flex cursor-pointer items-center gap-2.5 rounded-full py-1.5 pl-3 pr-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
+    >
+      <span>Map voice</span>
+      <span aria-hidden className={`relative h-5 w-9 rounded-full transition-colors duration-300 ${on ? "bg-teal-400" : "bg-white/20"}`}>
+        <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${on ? "translate-x-4" : "translate-x-0"}`} />
+      </span>
+    </button>
   );
 }

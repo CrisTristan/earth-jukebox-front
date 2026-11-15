@@ -56,7 +56,7 @@ async function PlaylistView({ params }: { params: Promise<{ slug: string }> }) {
       {tracks.length === 0 ? (
         <p className="glass rounded-3xl p-6 text-glass-muted">This playlist has no tracks yet.</p>
       ) : (
-        <ol className="space-y-3">
+        <ol data-voice-section="Tracks list" className="space-y-3">
           {tracks.map((track, i) => (
             <li key={track.id}>
               <TrackRow playlistSlug={playlist.slug} track={track} index={i} />

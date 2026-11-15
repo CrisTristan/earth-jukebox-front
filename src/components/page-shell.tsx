@@ -9,7 +9,7 @@ export function PageShell({ children }: { children: ReactNode }) {
     <div className="relative min-h-screen font-sans text-glass overflow-hidden">
       <div className="jb-bg" style={bgStyle} />
       <SiteNav />
-      <main className="jb-enter mx-auto max-w-6xl px-6 pt-32 pb-16 md:pt-40 md:pb-24">{children}</main>
+      <main data-voice-section="Main content" className="jb-enter mx-auto max-w-6xl px-6 pt-32 pb-16 md:pt-40 md:pb-24">{children}</main>
       <Mascot />
     </div>
   );

@@ -51,9 +51,12 @@ Si la track trae `source_metadata.frames_base_url` se usa esa carpeta en su luga
 
 ## Voz y sonido (accesibilidad)
 
-- **Guía por voz**: al entrar en una playlist se dice cuál elegiste. En el reproductor, al hacer clic sobre el mapa se dice el país y continente (o el mar/océano) bajo el cursor. Se activa o desactiva con "Voice" en la barra superior o con el botón del megáfono en el reproductor; la preferencia se guarda en el navegador.
-- **Sonido bajo el cursor**: al mover el ratón sobre el mapa suena una nota que sube con el dato de ese punto (p. ej. más vegetación, nota más aguda), se desplaza a izquierda/derecha según la longitud, suena grave y suave sobre el mar y hace un "tic" al cruzar una frontera.
-- Los navegadores no permiten reproducir audio hasta la primera interacción: si se abre una página directamente por URL, la voz y el sonido arrancan con el primer toque, clic o tecla.
+- **Guía por voz**: viene **apagada por defecto**. Se elige el nivel con "Voice" en la barra superior o con el botón del megáfono en el reproductor, y la tecla **V** la enciende o apaga en cualquier página. La preferencia se guarda en el navegador.
+  - **Off**: no habla.
+  - **Full guide**: anuncia la playlist o la track al entrar y, al moverse con el teclado (Tab, Shift+Tab, flechas) lee cada botón, enlace o control ("Play, button", "Seek, slider, value 12") y, al cambiar de sección, en cuál estás ("Playback controls. …"). Las secciones se marcan con el atributo `data-voice-section`.
+  - Quien usa un lector de pantalla (VoiceOver, TalkBack, NVDA) debería dejarla en Off para no oír dos voces. La lectura de botones solo se dispara con el teclado: los toques y los gestos del lector de pantalla del móvil no la activan.
+- **Voz del mapa**: el switch **Map voice** (esquina superior derecha del mapa, o la tecla **M**) hace que al hacer clic sobre el mapa se diga el país y continente (o el mar/océano) bajo el cursor. Es independiente de la guía por voz, viene encendido y la preferencia se guarda en el navegador. Los lectores de pantalla reciben el nombre del lugar siempre, por una región `aria-live`.
+- Los navegadores no permiten reproducir audio hasta la primera interacción: si se abre una página directamente por URL, la voz arranca con el primer toque, clic o tecla.
 
 ### Voz del navegador
 

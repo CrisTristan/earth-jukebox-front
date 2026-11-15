@@ -58,7 +58,7 @@ export async function PlaylistGrid() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div data-voice-section="Playlists list" className="grid gap-4 md:grid-cols-2">
       {playlists.map((p) => (
         <PlaylistCard key={p.id} playlist={p} />
       ))}
