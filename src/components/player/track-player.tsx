@@ -5,8 +5,10 @@
 import Link from "next/link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
-  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, X, AudioWaveform, ChevronRight, Satellite, ListMusic,
+  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic,
 } from "lucide-react";
+import { useDrawerSwipe } from "@/hooks/use-drawer-swipe";
+import { MOBILE_LANDSCAPE, useMediaQuery } from "@/hooks/use-media-query";
 import { Announce } from "@/components/voice/announce";
 import { useVoice } from "@/components/voice/voice-context";
 import { VoiceSettings } from "@/components/voice/voice-settings";
@@ -32,9 +34,6 @@ const SHORTCUTS = [
   ["Esc", "Close panels"],
 ] as const;
 
-/** Padding de la imagen en el escenario (`p-6`). */
-const STAGE_PADDING = 24;
-
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const fmtValue = (v: number) => (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
 const norm = (m: PlayerMeter, v: number | undefined) =>
@@ -53,6 +52,15 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const [announcement, setAnnouncement] = useState("");
 
   const voice = useVoice();
+
+  // ---- Móvil en horizontal: controles superpuestos que se esconden deslizándolos ----
+  const land = useMediaQuery(MOBILE_LANDSCAPE);
+  const [controlsOpen, setControlsOpen] = useState(true);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  /** Y donde empezó un toque sobre el asa "mostrar" (para detectar el deslizamiento hacia arriba). */
+  const showStartY = useRef<number | null>(null);
+  const controlsSwipe = useDrawerSwipe(controlsRef, { axis: "y", hideSign: 1, open: controlsOpen, onChange: setControlsOpen, enabled: land });
+
   const stageRef = useRef<HTMLElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const cursorDotRef = useRef<HTMLSpanElement>(null);
@@ -130,7 +138,9 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const geoAt = (x: number, y: number) => {
     const img = stageRef.current?.querySelector("img");
     if (!img) return null;
-    const map = containedRect(img.getBoundingClientRect(), STAGE_PADDING, img.naturalWidth, img.naturalHeight);
+    // El padding cambia según el ancho (0 en móvil, `md:p-6` en escritorio).
+    const padding = parseFloat(getComputedStyle(img).paddingLeft) || 0;
+    const map = containedRect(img.getBoundingClientRect(), padding, img.naturalWidth, img.naturalHeight);
     return toGeo(x, y, map, track.latRange, track.lonRange);
   };
 
@@ -176,9 +186,10 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
         text={`Now playing ${track.title}, from the playlist ${playlist.title}. Click the map to hear the name of the place. Use the Map voice switch, or press M, to turn that on or off.`}
       />
 
-      <div className="jb-enter flex h-screen flex-col gap-4 p-4">
-        <div className="flex min-h-0 flex-1 gap-4">
-          <aside className="glass hidden md:flex w-1/4 max-w-xs flex-col rounded-3xl p-5">
+      <div className="jb-enter flex h-dvh flex-col md:gap-4 md:p-4 land:gap-0 land:p-0">
+        <div className="flex min-h-0 flex-1 md:gap-4 land:gap-0">
+          {/* Sidebar solo en escritorio; en móvil horizontal no se muestra. */}
+          <aside className="glass hidden md:flex w-1/4 max-w-xs flex-col rounded-3xl p-5 land:hidden">
             <Link href={`/playlists/${playlist.slug}`} className="glass-light flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm">
               <ArrowLeft className="h-4 w-4" /> Playlist
             </Link>
@@ -220,13 +231,13 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           </aside>
 
           <section ref={stageRef} data-voice-section="Map" onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
-            className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60">
+            className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60 max-md:rounded-none max-md:border-0 land:fixed land:inset-0 land:rounded-none land:border-0">
             {/* Timelapse: todos los frames apilados; el actual se muestra con fundido. */}
             {frames.map((f, i) => (
               <img key={f.id} src={f.url}
                 alt={i === current ? `${track.imageLabel ?? track.title}, ${f.label} (frame ${i + 1} of ${frameCount})` : ""}
                 aria-hidden={i !== current}
-                className={`absolute inset-0 h-full w-full object-contain p-6 transition-opacity duration-1000 ${i === current ? "opacity-100" : "opacity-0"}`} />
+                className={`absolute inset-0 h-full w-full object-contain md:p-6 land:p-0 transition-opacity duration-1000 ${i === current ? "opacity-100" : "opacity-0"}`} />
             ))}
             {frameCount === 0 && (
               <p className="absolute inset-0 grid place-items-center text-glass-muted">This track has no frames.</p>
@@ -238,20 +249,29 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <span ref={cursorDotRef} className="block h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-white/25 shadow-[0_0_0_2px_rgba(0,0,0,0.45)]" />
             </div>
 
-            <div className="pointer-events-none absolute left-6 top-6 glass-light flex items-center gap-2 rounded-full px-4 py-1.5 text-xs uppercase tracking-widest">
-              <span className={`h-2 w-2 rounded-full bg-red-400 ${playing ? "animate-pulse" : ""}`} /> Earth Data Timelapse
-              {frame && <span className="text-glass-muted normal-case tracking-normal">· {frame.label} · {current + 1}/{frameCount}</span>}
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2 md:inset-x-6 md:top-6">
+              <div className="glass-light flex min-w-0 items-center gap-2 rounded-full px-4 py-1.5 text-xs uppercase tracking-widest">
+                <span className={`h-2 w-2 shrink-0 rounded-full bg-red-400 ${playing ? "animate-pulse" : ""}`} />
+                <span className="hidden shrink-0 sm:inline">Earth Data Timelapse</span>
+                {frame && (
+                  <span className="truncate text-glass-muted normal-case tracking-normal">
+                    <span className="hidden sm:inline">· </span>{frame.label} · {current + 1}/{frameCount}
+                  </span>
+                )}
+              </div>
+              <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+                <MapVoiceSwitch on={voice.mapVoice} onChange={voice.setMapVoice} />
+                <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-full p-2" aria-label="Back to playlist">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
-            <div className="absolute right-6 top-6 z-10 flex items-center gap-2">
-              <MapVoiceSwitch on={voice.mapVoice} onChange={voice.setMapVoice} />
-              <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-full p-2" aria-label="Back to playlist">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </div>
-            <div className="pointer-events-none absolute bottom-6 left-6 right-6 flex items-end justify-between gap-4">
+            {/* En horizontal se oculta mientras la barra de controles lo tapa. */}
+            <div data-controls={controlsOpen ? "open" : "closed"}
+              className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-end justify-between gap-4 transition-opacity duration-300 md:bottom-6 md:left-6 md:right-6 land:data-[controls=open]:opacity-0">
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-widest text-glass-muted">{playlist.title}</p>
-                <p className="font-display text-4xl md:text-5xl">{track.title}</p>
+                <p className="font-display text-3xl md:text-5xl">{track.title}</p>
               </div>
               {frame && meters.length > 0 && (
                 <div className="hidden sm:flex items-end gap-3 text-[10px] uppercase tracking-widest text-glass-muted" aria-hidden>
@@ -269,15 +289,26 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           </section>
         </div>
 
-        <footer data-voice-section="Playback controls" className="glass-strong relative flex h-[10vh] min-h-20 items-center gap-4 rounded-3xl px-4 md:px-6">
+        {/*
+          En horizontal: superpuesta al frame y pegada abajo. Al esconderla (deslizándola
+          hacia abajo o con el chevron) baja animada y termina en `display: none`.
+        */}
+        <div ref={controlsRef} {...controlsSwipe} data-hidden={!controlsOpen}
+          className="relative land:fixed land:inset-x-0 land:bottom-0 land:z-30 land:touch-none land:transition-[translate,display] land:transition-discrete land:duration-300 land:ease-[cubic-bezier(0.2,0.8,0.2,1)] land:starting:translate-y-full land:data-[hidden=true]:hidden land:data-[hidden=true]:translate-y-full">
+        <button type="button" onClick={() => setControlsOpen(false)} aria-label="Hide controls"
+          className="glass-strong absolute -top-6 left-1/2 hidden h-6 w-16 -translate-x-1/2 items-center justify-center rounded-b-none rounded-t-xl border-b-0 land:flex">
+          <ChevronDown className="h-4 w-4" />
+        </button>
+        <footer data-voice-section="Playback controls" inert={land && !controlsOpen}
+          className="glass-strong relative flex h-[10vh] min-h-20 items-center gap-4 rounded-3xl px-4 md:px-6 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 land:h-auto land:min-h-0 land:gap-3 land:rounded-b-none land:border-x-0 land:border-b-0 land:py-1.5">
           <div className="flex w-1/4 min-w-0 items-center gap-3">
-            {frame && <img src={frame.url} alt="" className="h-12 w-12 rounded-xl bg-black object-cover" />}
+            {frame && <img src={frame.url} alt="" className="h-12 w-12 rounded-xl bg-black object-cover land:hidden" />}
             <div className="hidden sm:block min-w-0">
               <p className="truncate text-sm font-semibold">{track.title}</p>
               <p className="truncate text-xs text-glass-muted">{track.source ?? playlist.title}</p>
             </div>
           </div>
-          <div className="flex flex-1 flex-col items-center gap-1.5">
+          <div className="flex flex-1 flex-col items-center gap-1.5 land:gap-1">
             <div className="flex items-center gap-5">
               {prevTrack && (
                 <Link href={trackHref(prevTrack.slug)} aria-label={`Previous track: ${prevTrack.title}`} className="hidden sm:block text-glass-muted transition hover:text-glass">
@@ -285,7 +316,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
                 </Link>
               )}
               <button onClick={() => step(-1)} aria-label="Previous frame" className="text-glass-muted transition hover:scale-110 hover:text-glass"><SkipBack className="h-5 w-5 fill-current" /></button>
-              <button onClick={player.toggle} disabled={frameCount === 0} aria-label={playing ? "Pause" : "Play"} className="grid h-12 w-12 place-items-center rounded-full bg-white text-black shadow-lg transition hover:scale-105 disabled:opacity-50">
+              <button onClick={player.toggle} disabled={frameCount === 0} aria-label={playing ? "Pause" : "Play"} className="grid h-12 w-12 land:h-10 land:w-10 place-items-center rounded-full bg-white text-black shadow-lg transition hover:scale-105 disabled:opacity-50">
                 {playing ? <Pause className="h-5 w-5 fill-current" /> : <Play className="ml-0.5 h-5 w-5 fill-current" />}
               </button>
               <button onClick={() => step(1)} aria-label="Next frame" className="text-glass-muted transition hover:scale-110 hover:text-glass"><SkipForward className="h-5 w-5 fill-current" /></button>
@@ -329,6 +360,21 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
             <button onClick={() => setInfo(true)} aria-label="Track info" className="glass-light rounded-full p-2"><Info className="h-4 w-4" /></button>
           </div>
         </footer>
+        </div>
+
+        {/* Asa para volver a mostrar los controles: solo existe mientras están escondidos. */}
+        {land && !controlsOpen && (
+          <button type="button" aria-label="Show controls"
+            onClick={() => setControlsOpen(true)}
+            onPointerDown={(e) => { showStartY.current = e.clientY; }}
+            onPointerUp={(e) => {
+              if (showStartY.current !== null && e.clientY - showStartY.current < -20) setControlsOpen(true);
+              showStartY.current = null;
+            }}
+            className="glass-strong jb-enter fixed bottom-0 left-1/2 z-30 flex h-7 w-16 -translate-x-1/2 touch-none items-center justify-center rounded-b-none rounded-t-xl border-b-0">
+            <ChevronUp className="h-4 w-4" />
+          </button>
+        )}
 
         <div onClick={() => setInfo(false)} className={`fixed inset-0 z-40 bg-black/20 transition-opacity duration-500 ${info ? "opacity-100" : "pointer-events-none opacity-0"}`} />
         <aside aria-hidden={!info} inert={!info} data-voice-section="Track information panel" className={`glass-strong fixed bottom-4 right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] overflow-y-auto rounded-3xl p-7 transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${info ? "translate-x-0" : "translate-x-[110%]"}`}>

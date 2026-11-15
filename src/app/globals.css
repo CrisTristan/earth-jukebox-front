@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Móvil en horizontal (las tablets miden más de 540 px de alto). Igual que MOBILE_LANDSCAPE en src/hooks/use-media-query.ts. */
+@custom-variant land (@media (orientation: landscape) and (max-height: 540px));
+
 @theme inline {
   --font-sans: var(--font-manrope), system-ui, sans-serif;
   --font-display: var(--font-instrument-serif), Georgia, serif;
