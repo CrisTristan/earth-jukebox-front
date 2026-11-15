@@ -45,12 +45,13 @@ async function TrackLoader({ params }: { params: Promise<{ slug: string; track: 
 function PlayerSkeleton() {
   return (
     <div className="relative min-h-screen overflow-hidden" aria-busy="true" aria-label="Loading track">
-      <div className="flex h-screen flex-col gap-4 p-4">
-        <div className="flex min-h-0 flex-1 gap-4">
-          <CoverSkeleton className="hidden md:block w-1/4 max-w-xs rounded-3xl" />
-          <CoverSkeleton className="flex-1 rounded-3xl" />
+      <div className="jb-bg" style={bgStyle} />
+      <div className="flex h-dvh flex-col md:gap-4 md:p-4 land:gap-0 land:p-0">
+        <div className="flex min-h-0 flex-1 md:gap-4 land:gap-0">
+          <CoverSkeleton className="hidden md:block w-1/4 max-w-xs rounded-3xl land:hidden" />
+          <CoverSkeleton className="flex-1 rounded-3xl max-md:rounded-none land:rounded-none" />
         </div>
-        <CoverSkeleton className="h-[10vh] min-h-20 rounded-3xl" />
+        <CoverSkeleton className="h-[10vh] min-h-20 rounded-3xl max-md:rounded-none land:h-20 land:min-h-0 land:rounded-b-none" />
       </div>
     </div>
   );
