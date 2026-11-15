@@ -3,33 +3,41 @@
 /* eslint-disable @next/next/no-img-element -- los frames se muestran tal cual, con object-contain y fundido */
 
 import Link from "next/link";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic,
+  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3,
 } from "lucide-react";
+import { useRadar } from "@/hooks/use-radar";
+import { analyze, originText, RESOLUTIONS, type Cell } from "@/lib/explore/disc";
+import { VOICES } from "@/lib/explore/explorer";
 import { useDrawerSwipe } from "@/hooks/use-drawer-swipe";
 import { MOBILE_LANDSCAPE, useMediaQuery } from "@/hooks/use-media-query";
 import { Announce } from "@/components/voice/announce";
 import { useVoice } from "@/components/voice/voice-context";
 import { VoiceSettings } from "@/components/voice/voice-settings";
 import { usePlayback } from "@/hooks/use-playback";
+import { useSonification } from "@/hooks/use-sonification";
 import { loadCountries, placeAt, type CountryShape } from "@/lib/geo/places";
 import { globeAt, hasGlobeCameras } from "@/lib/geo/globe";
-import { containedRect, toGeo } from "@/lib/geo/projection";
-import { SECONDS_PER_FRAME, type PlayerData, type PlayerMeter } from "@/lib/player";
-import { themeStyle } from "@/lib/theme";
+import { containedRect, gridValue, toGeo } from "@/lib/geo/projection";
+import { SECONDS_PER_FRAME, type DataBand, type DataBands, type PlayerData, type PlayerFrame, type PlayerMeter } from "@/lib/player";
 
-/** Opciones del menú de sonido (solo interfaz, sin audio). */
-const LAYER_MODES = ["Nature + music", "Nature only", "Music only"] as const;
-const PRESETS = ["Ambient", "Pulsing", "Orchestral", "Granular"] as const;
-type LayerMode = (typeof LAYER_MODES)[number];
-type Preset = (typeof PRESETS)[number];
+const NO_BANDS: DataBand[] = [];
+
+/** Texto del radar para la voz: los símbolos se dicen en palabras ("≥ 200" → "at least 200"). */
+const speakable = (text: string) =>
+  text.replace(/≥\s*/g, "at least ").replace(/<\s*/g, "below ").replace(/(\d)–(-?\d)/g, "$1 to $2");
+import { LAYER_MODES, PRESETS, type LayerMode, type Preset } from "@/lib/sound/sonifier";
+import { themeStyle } from "@/lib/theme";
 
 const SHORTCUTS = [
   ["Space", "Play / pause"],
   ["← →", "Previous / next frame"],
+  ["S", "Sound on / off"],
+  ["E", "Explore: a radar follows the pointer and plays the data levels around it"],
+  ["Explore", "Arrows move the radar, Enter or click says the place and its level, Space pauses it, + and − change its size"],
   ["D", "Describe the current frame"],
-  ["Click", "Hear the name of the place on the map"],
+  ["Click", "Hear the place and its value on the map"],
   ["V", "Voice guide on / off"],
   ["M", "Map voice on / off"],
   ["Esc", "Close panels"],
@@ -39,6 +47,35 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).p
 const fmtValue = (v: number) => (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
 const norm = (m: PlayerMeter, v: number | undefined) =>
   v == null ? 0 : m.max - m.min < 1e-9 ? 0.5 : Math.max(0, Math.min(1, (v - m.min) / (m.max - m.min)));
+
+interface Sampler {
+  frame: PlayerFrame;
+  /** Slug del globo (con cámaras por frame) o null si es un mapa plano. */
+  globe: string | null;
+  aspect: number;
+  scale: PlayerData["dataScale"];
+  levels: DataBands;
+}
+
+/**
+ * Qué hay en (u, v) de la imagen del frame, solo según el dato: el nivel en que
+ * cae su valor (umbrales del dataset) y el valor normalizado (percentiles 5–95).
+ * Sin dato, fuera del mapa o fuera del planeta: `band: null` (silencio). En los
+ * datasets donde la falta de dato es cero (lluvia, rayos) cuenta como el nivel más bajo.
+ */
+function sampleFrame(s: Sampler, u: number, v: number): Cell {
+  const none = { band: null, value: null };
+  if (u < 0 || u > 1 || v < 0 || v > 1) return none;
+  if (s.globe) {
+    const hit = globeAt(s.globe, s.frame.id, u, v, s.aspect);
+    if (!hit || hit === "space") return none;
+  }
+  const raw = gridValue(s.frame.grid, u, v);
+  if (raw == null) return s.levels.missingIsZero && s.frame.grid ? { band: 0, value: 0 } : none;
+  const sc = s.scale;
+  const value = sc ? Math.max(0, Math.min(1, (raw - sc.low) / (sc.top - sc.low))) : null;
+  return { band: s.levels.cuts.filter((c) => raw >= c).length, value };
+}
 
 export function TrackPlayer({ data }: { data: PlayerData }) {
   const { playlist, tracks, track, frames, meters } = data;
@@ -50,7 +87,18 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const [synth, setSynth] = useState<Preset>("Ambient");
   const [layers, setLayers] = useState<LayerMode>("Nature + music");
   const [vol, setVol] = useState(70);
+  const [muted, setMuted] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+
+  // ---- Explorar (disco de "Capas de la Tierra") ----
+  const [explore, setExplore] = useState(false);
+  const [origin, setOrigin] = useState({ u: 0.5, v: 0.5 });
+  const [radius, setRadius] = useState(0.45);
+  /** Rectángulo del mapa dentro del escenario (px), para dibujar los anillos encima. */
+  const [mapBox, setMapBox] = useState<{ left: number; top: number; width: number; height: number; aspect: number } | null>(null);
+  const arrowRef = useRef<SVGLineElement>(null);
+  const arrowState = useRef({ pos: 0, reach: 6 });
+  const [discReach, setDiscReach] = useState(6);
 
   const voice = useVoice();
 
@@ -69,12 +117,25 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const rafRef = useRef(0);
 
-  const player = usePlayback(duration, frameCount > 1);
+  // No arranca solo: empieza a la vez que el sonido, para que la barra nunca avance en silencio.
+  const player = usePlayback(duration);
   const playing = player.isPlaying;
   const t = player.position;
 
   const current = Math.max(0, Math.min(Math.floor(t / SECONDS_PER_FRAME), frameCount - 1));
   const frame = frames[current];
+  const sound = useSonification(data.sound, frames, current, playing, { volume: muted ? 0 : vol, layers, preset: synth });
+
+  // En cuanto el audio suena (al entrar, o tras el primer gesto), arranca la reproducción una vez.
+  const autoStarted = useRef(false);
+  const startWithSound = useEffectEvent(() => {
+    if (autoStarted.current || frameCount === 0) return;
+    autoStarted.current = true;
+    player.play();
+  });
+  useEffect(() => {
+    if (sound.started) startWithSound();
+  }, [sound.started]);
   const trackIndex = tracks.findIndex((x) => x.slug === track.slug);
   const prevTrack = trackIndex > 0 ? tracks[trackIndex - 1] : undefined;
   const nextTrack = trackIndex >= 0 ? tracks[trackIndex + 1] : undefined;
@@ -97,32 +158,6 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     setAnnouncement(describe(next));
   };
 
-  // ---- Atajos de teclado ----
-  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target?.closest("input, textarea, select")) return;
-    const onInteractive = !!target?.closest("button, a");
-    const k = e.key;
-    if (k === " " && !onInteractive) {
-      e.preventDefault();
-      player.toggle();
-    } else if ((k === "m" || k === "M") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
-      voice.setMapVoice(!voice.mapVoice);
-    } else if (k === "d" || k === "D") {
-      setAnnouncement(describe(current));
-    } else if (k === "Escape") {
-      setInfo(false);
-      setSynthOpen(false);
-    } else if (k === "ArrowLeft" || k === "ArrowRight") {
-      e.preventDefault();
-      step(k === "ArrowLeft" ? -1 : 1);
-    }
-  });
-  useEffect(() => {
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   // ---- Nombres de lugares (para el clic en el mapa) ----
   useEffect(() => {
     let alive = true;
@@ -143,14 +178,200 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
    * imagen. En un globo, `"space"` si cae fuera del planeta y `"unknown"` si el
    * frame no tiene cámara.
    */
-  const geoAt = (x: number, y: number): { lon: number; lat: number } | "space" | "unknown" | null => {
+  const mapRect = () => {
     const img = stageRef.current?.querySelector("img");
     if (!img) return null;
     // El padding cambia según el ancho (0 en móvil, `md:p-6` en escritorio).
     const padding = parseFloat(getComputedStyle(img).paddingLeft) || 0;
-    const map = containedRect(img.getBoundingClientRect(), padding, img.naturalWidth, img.naturalHeight);
-    return toGeo(x, y, map, track.latRange, track.lonRange);
+    return containedRect(img.getBoundingClientRect(), padding, img.naturalWidth, img.naturalHeight);
   };
+
+  /** `u`/`v`: posición en la imagen (0–1), que es también la de la cuadrícula del motor. */
+  const geoAt = (x: number, y: number): { lon: number; lat: number; u: number; v: number } | "space" | "unknown" | null => {
+    const map = mapRect();
+    if (!map) return null;
+    const point = toGeo(x, y, map, track.latRange, track.lonRange);
+    if (!point || !globe) return point;
+    // Globo: rayo desde la cámara calibrada del frame actual hasta la esfera.
+    const f = frames[current];
+    if (!f || !map.height) return "unknown";
+    const hit = globeAt(track.slug, f.id, point.u, point.v, map.width / map.height);
+    return hit === null ? "unknown" : hit === "space" ? hit : { ...hit, u: point.u, v: point.v };
+  };
+
+  // ---- Explorar: qué hay en cada punto de la imagen del frame actual ----
+  const aspect = mapBox?.aspect ?? 2;
+  const res = RESOLUTIONS[1];
+  const levels = data.dataBands;
+  const sampler = explore && frame && levels
+    ? { frame, globe: globe ? track.slug : null, aspect, scale: data.dataScale, levels }
+    : null;
+  const discGrid = useMemo(() => {
+    if (!sampler || (sampler.globe && globeAt(sampler.globe, sampler.frame.id, 0.5, 0.5, sampler.aspect) === null)) return null;
+    return analyze((u, v) => sampleFrame(sampler, u, v), { ...origin, radius }, sampler.aspect, res.rings, res.steps);
+    // `sampler` se recrea en cada render; lo que cambia de verdad son estas dependencias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explore, frame, globe, aspect, origin, radius, res, levels]);
+  const discUnavailable = !levels ? "This dataset has no levels to explore."
+    : !frame?.grid ? "This frame has no data to explore."
+      : !discGrid ? "The globe's camera isn't calibrated for this frame, so the radar can't read it. Try another frame." : null;
+  const discOriginText = discGrid && sampler && levels ? originText(discGrid, sampleFrame(sampler, origin.u, origin.v), levels.bands) : null;
+
+  const measureMap = () => {
+    const stage = stageRef.current?.getBoundingClientRect();
+    const img = stageRef.current?.querySelector("img");
+    const map = mapRect();
+    if (!stage || !map || !img?.naturalWidth) return;
+    const next = { left: map.left - stage.left, top: map.top - stage.top, width: map.width, height: map.height, aspect: img.naturalWidth / img.naturalHeight };
+    // Solo si cambió: este efecto corre en cada render.
+    setMapBox((prev) => (prev && (Object.keys(next) as (keyof typeof next)[]).every((k) => Math.abs(prev[k] - next[k]) < 0.5) ? prev : next));
+  };
+  useEffect(() => {
+    if (!explore) return;
+    measureMap();
+    window.addEventListener("resize", measureMap);
+    return () => window.removeEventListener("resize", measureMap);
+  });
+
+  /** Flecha del disco dibujada también sobre el mapa. */
+  const drawArrow = (pos: number, reach: number) => {
+    arrowState.current = { pos, reach };
+    if (reach !== discReach) setDiscReach(reach);
+    const line = arrowRef.current;
+    if (!line || !mapBox) return;
+    const R = radius * Math.min(mapBox.width, mapBox.height) * (reach / res.rings);
+    const a = (2 * Math.PI * pos) / res.steps - Math.PI / 2;
+    const cx = mapBox.left + origin.u * mapBox.width;
+    const cy = mapBox.top + origin.v * mapBox.height;
+    line.setAttribute("x2", String(cx + R * Math.cos(a)));
+    line.setAttribute("y2", String(cy + R * Math.sin(a)));
+  };
+  useEffect(() => drawArrow(arrowState.current.pos, arrowState.current.reach));
+
+  const moveOrigin = (u: number, v: number) => setOrigin({ u: Math.max(0.02, Math.min(0.98, u)), v: Math.max(0.02, Math.min(0.98, v)) });
+
+  // ---- Radar: suena alrededor del origen, sin interfaz visual propia ----
+  const radar = useRadar({ active: explore, grid: discGrid, bands: levels?.bands ?? NO_BANDS, volume: muted ? 0 : vol, onArrow: drawArrow });
+
+  /** Dice algo del radar: en la región aria-live (lectores de pantalla) y con la voz del mapa. */
+  const sayRadar = (text: string) => {
+    setAnnouncement(text);
+    voice.sayOnMap(speakable(text));
+  };
+
+  /** Entra o sale del modo explorar. Al entrar se pausa el timelapse y el radar empieza a sonar. */
+  const toggleExplore = () => {
+    if (explore) {
+      radar.stop();
+      setExplore(false);
+      sayRadar("Explore off.");
+      return;
+    }
+    player.pause();
+    setInfo(false);
+    setExplore(true);
+    radar.start(); // dentro del gesto (clic o tecla E): crea el audio
+    const scale = levels?.bands.map((b) => `${b.name} (${b.range}) sounds like ${VOICES[b.voice]!.toLowerCase()}`).join("; ");
+    sayRadar(
+      `Explore on. The radar turns around the pointer and plays the levels of ${track.listening.subject ?? "the data"} it finds. ` +
+        `Move the pointer over the map or use the arrow keys to move it. Click, or press Enter, to hear the place and its level. ` +
+        `Space pauses, plus and minus change its size, E or Escape exits. ` +
+        (scale ? `Levels: ${scale}.` : "") +
+        (discUnavailable ? ` ${discUnavailable}` : ""),
+    );
+  };
+
+  // Al entrar, el foco va al mapa para que las flechas muevan el radar.
+  useEffect(() => {
+    if (explore) stageRef.current?.focus();
+  }, [explore]);
+
+  /**
+   * Lo que se dice al hacer clic (o Enter) con el radar: el lugar bajo el origen y el
+   * nivel del dato ahí. Al moverlo no se dice nada; solo suena.
+   */
+  const placeAtPoint = (u: number, v: number): string => {
+    if (!frame) return "No data here.";
+    const countries = countriesRef.current;
+    let lon: number;
+    let lat: number;
+    if (globe) {
+      const hit = globeAt(track.slug, frame.id, u, v, aspect);
+      if (hit === null) return "Place names are not available for this frame.";
+      if (hit === "space") return "Space, outside the planet.";
+      ({ lon, lat } = hit);
+    } else {
+      lon = track.lonRange[0] + u * (track.lonRange[1] - track.lonRange[0]);
+      lat = track.latRange[0] + v * (track.latRange[1] - track.latRange[0]);
+    }
+    const place = countries ? placeAt(countries, lon, lat).spoken : "The map is still loading";
+    const raw = gridValue(frame.grid, u, v);
+    const cell = sampler ? sampleFrame(sampler, u, v) : null;
+    const band = cell?.band != null ? levels?.bands[cell.band] : undefined;
+    if (raw == null) return `${place}. ${band ? `${band.name}.` : "No data here."}`;
+    const value = `${fmtValue(raw)}${track.unit ? ` ${track.unit}` : ""}`;
+    return `${place}: ${band ? `${band.name}, ` : ""}${value}.`;
+  };
+
+  const onStageKeyDown = (e: React.KeyboardEvent) => {
+    if (!explore) return;
+    const m = ({ ArrowLeft: [-0.03, 0], ArrowRight: [0.03, 0], ArrowUp: [0, -0.03], ArrowDown: [0, 0.03] } as Record<string, [number, number]>)[e.key];
+    if (m) {
+      e.preventDefault();
+      moveOrigin(origin.u + m[0], origin.v + m[1]);
+    } else if (e.key === "Enter") {
+      // Como el clic: decir dónde está el radar.
+      e.preventDefault();
+      sayRadar(placeAtPoint(origin.u, origin.v));
+    } else if (e.key === " ") {
+      e.preventDefault();
+      const wasPlaying = radar.playing;
+      void radar.toggle();
+      sayRadar(wasPlaying ? "Radar paused." : "Radar playing.");
+    } else if (e.key === "+" || e.key === "=" || e.key === "-") {
+      e.preventDefault();
+      const r = Math.max(0.12, Math.min(0.7, radius + (e.key === "-" ? -0.03 : 0.03)));
+      setRadius(r);
+      sayRadar(`Radar size: ${Math.round(r * 100)} percent.`);
+    }
+  };
+
+  // ---- Atajos de teclado ----
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (target?.closest("input, textarea, select")) return;
+    const k = e.key;
+    const plain = !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat;
+    // Con el foco en el mapa explorando, las flechas, Espacio y +/- son del radar (`onStageKeyDown`).
+    const inExplore = !!target?.closest("[data-explore]");
+    const onInteractive = !!target?.closest("button, a");
+    if ((k === "e" || k === "E") && plain) {
+      toggleExplore();
+    } else if ((k === "m" || k === "M") && plain) {
+      voice.setMapVoice(!voice.mapVoice);
+    } else if ((k === "s" || k === "S") && plain) {
+      setMuted(!muted);
+      setAnnouncement(muted ? "Sound on." : "Sound off.");
+    } else if (k === "Escape") {
+      setInfo(false);
+      setSynthOpen(false);
+      if (explore) toggleExplore();
+    } else if (inExplore) {
+      return;
+    } else if (k === " " && !onInteractive) {
+      e.preventDefault();
+      player.toggle();
+    } else if (k === "d" || k === "D") {
+      setAnnouncement(describe(current));
+    } else if (k === "ArrowLeft" || k === "ArrowRight") {
+      e.preventDefault();
+      step(k === "ArrowLeft" ? -1 : 1);
+    }
+  });
+  useEffect(() => {
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   /** El cursor se atenúa fuera del mapa. */
   const updateCursor = () => {
@@ -169,6 +390,15 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     }
     pointerRef.current = { x: e.clientX, y: e.clientY };
     rafRef.current ||= requestAnimationFrame(updateCursor);
+    if (explore) {
+      // Explorando: el origen del radar sigue al cursor sobre el mapa (fuera de él se queda donde estaba).
+      const map = mapRect();
+      if (map && map.width && map.height) {
+        const u = (e.clientX - map.left) / map.width;
+        const v = (e.clientY - map.top) / map.height;
+        if (u >= 0 && u <= 1 && v >= 0 && v <= 1) moveOrigin(u, v);
+      }
+    }
   };
 
   const onStageLeave = () => {
@@ -179,14 +409,30 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const onStageClick = (e: React.MouseEvent<HTMLElement>) => {
     if ((e.target as HTMLElement).closest("a, button")) return;
     cursorDotRef.current?.animate([{ scale: "1" }, { scale: "1.9" }, { scale: "1" }], { duration: 280, easing: "ease-out" });
+    if (explore) {
+      // Explorando: el clic fija el radar ahí y dice el lugar y el nivel del dato.
+      const map = mapRect();
+      if (!map || !map.width || !map.height) return;
+      const u = (e.clientX - map.left) / map.width;
+      const v = (e.clientY - map.top) / map.height;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return;
+      moveOrigin(u, v);
+      sayRadar(placeAtPoint(u, v));
+      return;
+    }
     const geo = geoAt(e.clientX, e.clientY);
     if (!geo) return;
     const countries = countriesRef.current;
-    const text = geo === "space"
-      ? "Space, outside the planet."
-      : geo === "unknown"
-        ? "Place names are not available for this frame."
-        : countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
+    let text: string;
+    if (geo === "space") text = "Space, outside the planet.";
+    else if (geo === "unknown") text = "Place names are not available for this frame.";
+    else {
+      // Valor del dato en ese punto: la cuadrícula del motor cubre la imagen entera.
+      const value = frame ? gridValue(frame.grid, geo.u, geo.v) : null;
+      sound.ping(value, Math.max(-1, Math.min(1, geo.u * 2 - 1)));
+      const place = countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
+      text = value != null && countries ? `${place}: ${fmtValue(value)}${track.unit ? ` ${track.unit}` : ""}.` : place;
+    }
     setAnnouncement(text);
     voice.sayOnMap(text);
   };
@@ -196,7 +442,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       <div className="jb-bg" />
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <Announce
-        text={`Now playing ${track.title}, from the playlist ${playlist.title}. Click the map to hear the name of the place. Use the Map voice switch, or press M, to turn that on or off.`}
+        text={`Now playing ${track.title}, from the playlist ${playlist.title}. The sound follows the data: a higher note means a higher value. Press S to turn the sound on or off. Click the map to hear the place and its value; press M to turn that voice on or off.`}
       />
 
       <div className="jb-enter flex h-dvh flex-col md:gap-4 md:p-4 land:gap-0 land:p-0">
@@ -244,7 +490,9 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           </aside>
 
           <section ref={stageRef} data-voice-section="Map" onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
-            className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60 max-md:rounded-none max-md:border-0 land:fixed land:inset-0 land:rounded-none land:border-0">
+            onKeyDown={onStageKeyDown} data-explore={explore ? "" : undefined}
+            {...(explore ? { tabIndex: 0, role: "application", "aria-label": `Map radar. Move the pointer or use the arrow keys to move it; Space pauses; plus and minus change its size; E exits. ${discOriginText ?? discUnavailable ?? ""}` } : {})}
+            className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60 focus-visible:outline-4 focus-visible:outline-amber-300 max-md:rounded-none max-md:border-0 land:fixed land:inset-0 land:rounded-none land:border-0">
             {/* Timelapse: todos los frames apilados; el actual se muestra con fundido. */}
             {frames.map((f, i) => (
               <img key={f.id} src={f.url}
@@ -256,6 +504,35 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <p className="absolute inset-0 grid place-items-center text-glass-muted">This track has no frames.</p>
             )}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+
+            {/* Explorar: anillos alrededor del origen y la flecha del disco, sobre el mapa. */}
+            {explore && mapBox && (() => {
+              const cx = mapBox.left + origin.u * mapBox.width;
+              const cy = mapBox.top + origin.v * mapBox.height;
+              const R = radius * Math.min(mapBox.width, mapBox.height);
+              const reach = discReach;
+              return (
+                <svg aria-hidden className="pointer-events-none absolute inset-0 z-10 h-full w-full">
+                  {Array.from({ length: res.rings }, (_, i) => (
+                    <circle key={i} cx={cx} cy={cy} r={(R * (i + 1)) / res.rings} fill="none"
+                      stroke={i + 1 === reach ? "#ffc23d" : "rgba(255,255,255,.45)"} strokeWidth={i + 1 === reach ? 2.5 : 1} />
+                  ))}
+                  <line ref={arrowRef} x1={cx} y1={cy} x2={cx} y2={cy - (R * reach) / res.rings} stroke="#fff" strokeWidth={3} strokeLinecap="round" />
+                  <circle cx={cx} cy={cy} r={6} fill="#fff" stroke="#000" strokeWidth={2} />
+                </svg>
+              );
+            })()}
+
+            {/*
+              Solo si se abrió la URL directamente: el navegador no deja sonar sin un gesto.
+              Pulsar aquí (o cualquier tecla) arranca sonido y timelapse a la vez.
+            */}
+            {sound.status === "blocked" && frameCount > 0 && (
+              <button type="button" onClick={() => { sound.enable(); player.play(); }}
+                className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-3 rounded-full bg-white px-6 py-4 text-base font-semibold text-black shadow-2xl transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-400">
+                <Play className="h-5 w-5 fill-current" aria-hidden /> Play with sound
+              </button>
+            )}
 
             {/* Cursor: círculo pequeño que sigue al ratón sobre el mapa (se mueve sin re-render). */}
             <div ref={cursorRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-20 opacity-0 transition-opacity duration-150 will-change-transform">
@@ -365,10 +642,17 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
                 </div>
               )}
             </div>
-            <div className="hidden lg:flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-glass-muted" />
-              <input type="range" min={0} max={100} value={vol} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="h-1 w-20 accent-white" />
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setMuted(!muted)} aria-pressed={muted} aria-label="Mute sound (S)"
+                className="text-glass-muted transition hover:text-glass">
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+              <input type="range" min={0} max={100} value={vol} onChange={(e) => { setVol(+e.target.value); setMuted(false); }} aria-label="Volume" className="hidden h-1 w-20 accent-white lg:block" />
             </div>
+            <button onClick={toggleExplore} aria-pressed={explore} aria-label="Explore the map with the radar (E)"
+              className={`rounded-full p-2 ${explore ? "bg-amber-300 text-black" : "glass-light"}`}>
+              <Disc3 className="h-4 w-4" />
+            </button>
             <VoiceSettings variant="icon" className="glass-light rounded-full p-2" />
             <button onClick={() => setInfo(true)} aria-label="Track info" className="glass-light rounded-full p-2"><Info className="h-4 w-4" /></button>
           </div>
@@ -428,6 +712,16 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
                 </ul>
               </div>
             )}
+            <div>
+              <p className="text-xs uppercase tracking-widest text-glass-muted">What you hear</p>
+              <ul className="mt-3 space-y-2">
+                <li><span className="font-semibold">Melody:</span> {track.listening.melody ?? "higher note = higher value"}.</li>
+                <li><span className="font-semibold">Nature:</span> earth rumble where the signal is over land, waves where it is over the ocean
+                  {data.sound.texture === "rain" ? ", rain and wind" : data.sound.texture === "leaves" ? ", rustling leaves" : ", crackling"} growing with {track.listening.strong ?? "intensity"}.</li>
+                {track.listening.secondary && <li><span className="font-semibold">Crystal bells:</span> {track.listening.secondary}.</li>}
+                <li><span className="font-semibold">Left / right:</span> where on the map the signal is centered.</li>
+              </ul>
+            </div>
             <div>
               <p className="text-xs uppercase tracking-widest text-glass-muted">Keyboard</p>
               <ul className="mt-3 space-y-1.5">

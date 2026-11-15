@@ -9,7 +9,8 @@
 import { frameUrl, publicImageUrl } from "@/lib/api/frames";
 import type { PlaylistDetail, PlaylistSummary, TrackDetail, TrackSummary } from "@/lib/api/types";
 
-export const API_URL = (process.env.API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+/** API de Earth Jukebox en producción (fija: no depende de variables de entorno). */
+export const API_URL = "https://api.earth-jukebox.space";
 
 export class ApiError extends Error {
   constructor(message: string, readonly status?: number, options?: ErrorOptions) {

@@ -71,6 +71,10 @@ export interface EngineHints {
   brightness?: string;
   more_is?: string;
   words?: Partial<Record<"image" | "melody" | "strong" | "subject" | "secondary", string>>;
+  /** Feature que sigue la melodía y el rango de valores que recorre (no son notas). */
+  melody?: { feature?: string; range?: [number, number] };
+  /** Textura de naturaleza: "heat", "rain" o "leaves". */
+  texture?: string;
   [key: string]: unknown;
 }
 
