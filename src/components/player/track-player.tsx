@@ -19,7 +19,7 @@ import { usePlayback } from "@/hooks/use-playback";
 import { useSonification } from "@/hooks/use-sonification";
 import { loadCountries, placeAt, type CountryShape } from "@/lib/geo/places";
 import { globeAt, hasGlobeCameras } from "@/lib/geo/globe";
-import { containedRect, gridValue, toGeo } from "@/lib/geo/projection";
+import { containedRect, gridValue, toGeo, type DataRegion } from "@/lib/geo/projection";
 import { SECONDS_PER_FRAME, type DataBand, type DataBands, type PlayerData, type PlayerFrame, type PlayerMeter } from "@/lib/player";
 
 const NO_BANDS: DataBand[] = [];
@@ -28,6 +28,7 @@ const NO_BANDS: DataBand[] = [];
 const speakable = (text: string) =>
   text.replace(/≥\s*/g, "at least ").replace(/<\s*/g, "below ").replace(/(\d)–(-?\d)/g, "$1 to $2");
 import { LAYER_MODES, PRESETS, type LayerMode, type Preset } from "@/lib/sound/sonifier";
+import { paletteFor } from "@/lib/sound/palettes";
 import { themeStyle } from "@/lib/theme";
 
 const SHORTCUTS = [
@@ -55,6 +56,8 @@ interface Sampler {
   aspect: number;
   scale: PlayerData["dataScale"];
   levels: DataBands;
+  /** Recuadro de la imagen que cubre la cuadrícula del motor. */
+  region: DataRegion;
 }
 
 /**
@@ -70,7 +73,7 @@ function sampleFrame(s: Sampler, u: number, v: number): Cell {
     const hit = globeAt(s.globe, s.frame.id, u, v, s.aspect);
     if (!hit || hit === "space") return none;
   }
-  const raw = gridValue(s.frame.grid, u, v);
+  const raw = gridValue(s.frame.grid, u, v, s.region);
   if (raw == null) return s.levels.missingIsZero && s.frame.grid ? { band: 0, value: 0 } : none;
   const sc = s.scale;
   const value = sc ? Math.max(0, Math.min(1, (raw - sc.low) / (sc.top - sc.low))) : null;
@@ -101,6 +104,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const [discReach, setDiscReach] = useState(6);
 
   const voice = useVoice();
+  const palette = paletteFor(track.profileId);
 
   // ---- Móvil en horizontal: controles superpuestos que se esconden deslizándolos ----
   const land = useMediaQuery(MOBILE_LANDSCAPE);
@@ -204,7 +208,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const res = RESOLUTIONS[1];
   const levels = data.dataBands;
   const sampler = explore && frame && levels
-    ? { frame, globe: globe ? track.slug : null, aspect, scale: data.dataScale, levels }
+    ? { frame, globe: globe ? track.slug : null, aspect, scale: data.dataScale, levels, region: track.dataRegion }
     : null;
   const discGrid = useMemo(() => {
     if (!sampler || (sampler.globe && globeAt(sampler.globe, sampler.frame.id, 0.5, 0.5, sampler.aspect) === null)) return null;
@@ -251,7 +255,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const moveOrigin = (u: number, v: number) => setOrigin({ u: Math.max(0.02, Math.min(0.98, u)), v: Math.max(0.02, Math.min(0.98, v)) });
 
   // ---- Radar: suena alrededor del origen, sin interfaz visual propia ----
-  const radar = useRadar({ active: explore, grid: discGrid, bands: levels?.bands ?? NO_BANDS, volume: muted ? 0 : vol, onArrow: drawArrow });
+  const radar = useRadar({ active: explore, grid: discGrid, bands: levels?.bands ?? NO_BANDS, volume: muted ? 0 : vol, profileId: track.profileId, onArrow: drawArrow });
 
   /** Dice algo del radar: en la región aria-live (lectores de pantalla) y con la voz del mapa. */
   const sayRadar = (text: string) => {
@@ -305,7 +309,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       lat = track.latRange[0] + v * (track.latRange[1] - track.latRange[0]);
     }
     const place = countries ? placeAt(countries, lon, lat).spoken : "The map is still loading";
-    const raw = gridValue(frame.grid, u, v);
+    const raw = gridValue(frame.grid, u, v, track.dataRegion);
     const cell = sampler ? sampleFrame(sampler, u, v) : null;
     const band = cell?.band != null ? levels?.bands[cell.band] : undefined;
     if (raw == null) return `${place}. ${band ? `${band.name}.` : "No data here."}`;
@@ -428,7 +432,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     else if (geo === "unknown") text = "Place names are not available for this frame.";
     else {
       // Valor del dato en ese punto: la cuadrícula del motor cubre la imagen entera.
-      const value = frame ? gridValue(frame.grid, geo.u, geo.v) : null;
+      const value = frame ? gridValue(frame.grid, geo.u, geo.v, track.dataRegion) : null;
       sound.ping(value, Math.max(-1, Math.min(1, geo.u * 2 - 1)));
       const place = countries ? placeAt(countries, geo.lon, geo.lat).spoken : "The map is still loading, try again in a moment.";
       text = value != null && countries ? `${place}: ${fmtValue(value)}${track.unit ? ` ${track.unit}` : ""}.` : place;
@@ -606,7 +610,8 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
                 </Link>
               )}
               <button onClick={() => step(-1)} aria-label="Previous frame" className="text-glass-muted transition hover:scale-110 hover:text-glass"><SkipBack className="h-5 w-5 fill-current" /></button>
-              <button onClick={player.toggle} disabled={frameCount === 0} aria-label={playing ? "Pause" : "Play"} className="grid h-12 w-12 land:h-10 land:w-10 place-items-center rounded-full bg-white text-black shadow-lg transition hover:scale-105 disabled:opacity-50">
+              {/* Reproducir sale del modo explorar: el radar y el timelapse no suenan a la vez. */}
+              <button onClick={() => { if (explore && !playing) toggleExplore(); player.toggle(); }} disabled={frameCount === 0} aria-label={playing ? "Pause" : "Play"} className="grid h-12 w-12 land:h-10 land:w-10 place-items-center rounded-full bg-white text-black shadow-lg transition hover:scale-105 disabled:opacity-50">
                 {playing ? <Pause className="h-5 w-5 fill-current" /> : <Play className="ml-0.5 h-5 w-5 fill-current" />}
               </button>
               <button onClick={() => step(1)} aria-label="Next frame" className="text-glass-muted transition hover:scale-110 hover:text-glass"><SkipForward className="h-5 w-5 fill-current" /></button>
@@ -716,8 +721,12 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <p className="text-xs uppercase tracking-widest text-glass-muted">What you hear</p>
               <ul className="mt-3 space-y-2">
                 <li><span className="font-semibold">Melody:</span> {track.listening.melody ?? "higher note = higher value"}.</li>
-                <li><span className="font-semibold">Nature:</span> earth rumble where the signal is over land, waves where it is over the ocean
-                  {data.sound.texture === "rain" ? ", rain and wind" : data.sound.texture === "leaves" ? ", rustling leaves" : ", crackling"} growing with {track.listening.strong ?? "intensity"}.</li>
+                {palette.hear ? (
+                  <li><span className="font-semibold">Instruments:</span> {palette.hear}</li>
+                ) : (
+                  <li><span className="font-semibold">Nature:</span> earth rumble where the signal is over land, waves where it is over the ocean
+                    {data.sound.texture === "rain" ? ", rain and wind" : data.sound.texture === "leaves" ? ", rustling leaves" : ", crackling"} growing with {track.listening.strong ?? "intensity"}.</li>
+                )}
                 {track.listening.secondary && <li><span className="font-semibold">Crystal bells:</span> {track.listening.secondary}.</li>}
                 <li><span className="font-semibold">Left / right:</span> where on the map the signal is centered.</li>
               </ul>

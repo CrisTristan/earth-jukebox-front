@@ -86,7 +86,8 @@ function waterAt(lon: number, lat: number): string {
   if (box(-84, -60, 9, 22)) return "the Caribbean Sea";
   if (lon >= 20 && lon < 147 && lat < 30 && !(lon >= 100 && lat > 0) && !(lon >= 120 && lat > -10)) return "the Indian Ocean";
   if (lon >= -70 && lon < 20) return "the Atlantic Ocean";
-  if (lon >= -100 && lon < -70 && lat > 8) return "the Atlantic Ocean";
+  // Costa este de Norteamérica; al oeste del istmo (Pacífico de México y Centroamérica) es Pacífico.
+  if (lon >= -82 && lon < -70 && lat > 22) return "the Atlantic Ocean";
   return "the Pacific Ocean";
 }
 

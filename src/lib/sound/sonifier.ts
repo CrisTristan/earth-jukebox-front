@@ -14,7 +14,14 @@
  * - `brightness` → brillo del timbre de la melodía (filtro).
  * - Reparto del dato entre regiones de tierra y de océano → retumbo frente a olas.
  * - `centroid_lon` → posición estéreo: el sonido se oye hacia donde está el dato.
+ *
+ * Con qué suena cada dataset lo decide su paleta (`palettes.ts`): la melodía se toca
+ * con muestras de instrumentos reales (VCSL, `samples.ts`) y, salvo en los datasets de
+ * naturaleza, las camas de ruido se cambian por una textura musical. Mientras las
+ * muestras cargan (o si fallan) suenan los osciladores y el ruido de siempre.
  */
+import { paletteFor, paletteInstruments, type Palette } from "@/lib/sound/palettes";
+import { loadInstrument, playSample, type Instrument, type InstrumentId } from "@/lib/sound/samples";
 
 export const LAYER_MODES = ["Nature + music", "Nature only", "Music only"] as const;
 export const PRESETS = ["Ambient", "Pulsing", "Orchestral", "Granular"] as const;
@@ -30,6 +37,8 @@ export interface ScaledFeature {
 
 /** Lo que el motor necesita de una track (serializable: viaja del servidor al cliente). */
 export interface SoundProfile {
+  /** Perfil del motor: elige la paleta de sonidos (`palettes.ts`). */
+  profileId: string | null;
   melody: ScaledFeature | null;
   intensity: ScaledFeature | null;
   secondary: ScaledFeature | null;
@@ -80,6 +89,9 @@ const PRESET_VOICE: Record<Preset, { every: number; dur: number; attack: number;
   Granular: { every: 0.11, dur: 0.08, attack: 0.004, wave: "sine", gain: 0.07, fifth: false, scatter: true },
 };
 
+/** Volumen de la melodía con muestras, por preset (las muestras llegan normalizadas a -3 dB). */
+const SAMPLE_GAIN: Record<Preset, number> = { Ambient: 0.32, Pulsing: 0.24, Orchestral: 0.22, Granular: 0.12 };
+
 /** Cada cuánto se reparten los detalles de naturaleza (s). */
 const GRAIN_EVERY = 0.25;
 /** Margen con que se programa el sonido por delante del reloj (s). */
@@ -87,6 +99,8 @@ const LOOKAHEAD = 0.2;
 
 interface FrameState {
   midi: number;
+  /** Valor de la melodía en 0–1 (0.5 = centro, en los datos con centro). */
+  melodyValue: number;
   pan: number;
   bright: number;
   intensity: number;
@@ -107,6 +121,13 @@ interface Graph {
   music: GainNode;
   reverb: ConvolverNode;
   melodyFilter: BiquadFilterNode;
+  /**
+   * Entradas de la melodía y de la textura. Al pausar se apagan y se cambian por
+   * otras nuevas: así se cortan las notas que seguían sonando (un dron dura varios
+   * segundos), sin tocar el sonido del clic en el mapa.
+   */
+  melodyIn: GainNode;
+  textureIn: GainNode;
   white: AudioBuffer;
   beds: Record<Ground, Bed>;
 }
@@ -121,9 +142,21 @@ export class Sonifier {
   private volume = 70;
   private layers: LayerMode = "Nature + music";
   private preset: Preset = "Ambient";
-  private state: FrameState = { midi: 67, pan: 0, bright: 0.5, intensity: 0.4, secondary: 0, land: 0.5 };
+  private state: FrameState = { midi: 67, melodyValue: 0.5, pan: 0, bright: 0.5, intensity: 0.4, secondary: 0, land: 0.5 };
+  private readonly palette: Palette;
+  /** Instrumentos ya cargados para el contexto actual. */
+  private inst = new Map<InstrumentId, Instrument>();
+  private nextDrone = 0;
+  private nextShimmer = 0;
 
-  constructor(private readonly profile: SoundProfile) {}
+  constructor(private readonly profile: SoundProfile) {
+    this.palette = paletteFor(profile.profileId);
+  }
+
+  /** Con naturaleza sintetizada (humedad, lluvia, temperatura, vegetación) o con textura musical. */
+  private get natural() {
+    return this.palette.texture.kind === "nature";
+  }
 
   /** El audio está sonando (el navegador lo permitió). */
   get running(): boolean {
@@ -192,6 +225,7 @@ export class Sonifier {
     if (!this.playing) {
       this.playing = true;
       this.nextGrain = t + 0.03;
+      this.nextDrone = this.nextShimmer = t + 0.03;
       this.timer = window.setInterval(() => this.schedule(), 50);
     }
   }
@@ -206,6 +240,20 @@ export class Sonifier {
     for (const bed of Object.values(g.beds)) {
       bed.gain.gain.cancelScheduledValues(t);
       bed.gain.gain.setTargetAtTime(0, t, 0.15);
+    }
+    this.cutTails(g);
+  }
+
+  /** Apaga en ~0.3 s lo que seguía sonando (notas, drones, granos) y deja entradas nuevas. */
+  private cutTails(g: Graph) {
+    const t = g.ctx.currentTime;
+    for (const [key, to] of [["melodyIn", g.melodyFilter], ["textureIn", g.nature]] as const) {
+      const old = g[key];
+      old.gain.setTargetAtTime(0, t, 0.08);
+      window.setTimeout(() => old.disconnect(), 600);
+      const fresh = g.ctx.createGain();
+      fresh.connect(to);
+      g[key] = fresh;
     }
   }
 
@@ -233,7 +281,10 @@ export class Sonifier {
       this.tone({ t, f: 110, dur: 0.25, g: 0.12, pan, bus: g.music });
       return;
     }
-    const f = hz(noteFor((value - range[0]) / (range[1] - range[0] || 1)));
+    const midi = noteFor((value - range[0]) / (range[1] - range[0] || 1));
+    const radar = this.inst.get(this.palette.radar);
+    if (radar && playSample(radar, { t, dest: g.music, midi: midi + this.palette.radarShift, gain: 0.32, pan, dur: 1.6 })) return;
+    const f = hz(midi);
     this.tone({ t, f, dur: 0.9, g: 0.14, pan, bus: g.music });
     this.tone({ t, f: f * 2.76, dur: 0.4, g: 0.03, pan, bus: g.music });
   }
@@ -245,7 +296,17 @@ export class Sonifier {
     window.clearInterval(this.duckTimer);
     const g = this.g;
     this.g = null;
+    this.inst.clear();
     void g?.ctx.close().catch(() => {});
+  }
+
+  /** Carga los instrumentos de la paleta; cada uno se usa en cuanto está listo. */
+  private loadSamples(ctx: AudioContext) {
+    for (const id of paletteInstruments(this.palette)) {
+      void loadInstrument(ctx, id).then((inst) => {
+        if (inst && this.g?.ctx === ctx) this.inst.set(id, inst);
+      });
+    }
   }
 
   // ---- Interno ----
@@ -254,8 +315,10 @@ export class Sonifier {
     const { features } = frame;
     const p = this.profile;
     const lon = features.centroid_lon;
+    const melody = normalized(p.melody, features) ?? 0.5;
     return {
-      midi: noteFor(normalized(p.melody, features) ?? 0.5),
+      midi: noteFor(melody),
+      melodyValue: clamp01(melody),
       intensity: clamp01(normalized(p.intensity, features) ?? 0.4),
       secondary: clamp01(normalized(p.secondary, features) ?? 0),
       bright: clamp01(normalized(p.brightness, features) ?? 0.5),
@@ -359,7 +422,14 @@ export class Sonifier {
       duck.gain.setTargetAtTime(speaking ? 0.3 : 1, ctx.currentTime, 0.08);
     }, 150);
 
-    return { ctx, master, duck, nature, music, reverb, melodyFilter, white, beds };
+    const melodyIn = ctx.createGain();
+    melodyIn.connect(melodyFilter);
+    const textureIn = ctx.createGain();
+    textureIn.connect(nature);
+    const graph = { ctx, master, duck, nature, music, reverb, melodyFilter, melodyIn, textureIn, white, beds };
+    // `this.g` todavía no apunta a este grafo: se compara cuando terminan de cargar.
+    queueMicrotask(() => this.loadSamples(ctx));
+    return graph;
   }
 
   /** Volumen y posición de las camas según el frame. */
@@ -369,11 +439,13 @@ export class Sonifier {
     const s = this.state;
     const level = 0.35 + 0.65 * s.intensity;
     const rain = this.profile.texture === "rain";
+    // Fuera de los datasets de naturaleza, la textura musical (`texture`) reemplaza a las camas.
+    const on = this.natural ? 1 : 0;
     const target: Record<Ground, number> = {
-      tierra: NATURE.tierra * s.land * level * 0.6,
-      agua: NATURE.agua * (1 - s.land) * level,
-      nube: NATURE.nube * (rain ? 0.4 + 0.8 * s.intensity : 0.35),
-      hielo: NATURE.hielo * (0.3 + 1.5 * s.secondary),
+      tierra: on * NATURE.tierra * s.land * level * 0.6,
+      agua: on * NATURE.agua * (1 - s.land) * level,
+      nube: on * NATURE.nube * (rain ? 0.4 + 0.8 * s.intensity : 0.35),
+      hielo: on * NATURE.hielo * (0.3 + 1.5 * s.secondary),
     };
     for (const k of Object.keys(target) as Ground[]) {
       const bed = g.beds[k];
@@ -413,8 +485,19 @@ export class Sonifier {
       if (Math.random() < 0.25) midi += 12;
       pan = clamp(pan + (Math.random() - 0.5) * 0.6, -1, 1);
     }
+    // Con muestras: el instrumento de la paleta (en los datos con centro, otro por encima del centro).
+    const warm = this.palette.warm && s.melodyValue > 0.5 ? this.palette.warm : null;
+    const inst = this.inst.get(warm ? warm.inst : this.palette.melody);
+    if (inst) {
+      const note = midi + (warm ? warm.shift : this.palette.shift);
+      const gain = SAMPLE_GAIN[this.preset];
+      const dur = Math.max(voice.dur, 0.12);
+      playSample(inst, { t, dest: g.melodyIn, midi: note, gain, pan, dur });
+      if (voice.fifth) playSample(inst, { t, dest: g.melodyIn, midi: note + 7, gain: gain * 0.6, pan, dur });
+      return;
+    }
     const f = hz(midi);
-    const common = { t, dur: voice.dur, pan, wave: voice.wave, attack: voice.attack, bus: g.melodyFilter };
+    const common = { t, dur: voice.dur, pan, wave: voice.wave, attack: voice.attack, bus: g.melodyIn };
     this.tone({ ...common, f, g: voice.gain });
     if (voice.fifth) this.tone({ ...common, f: f * 1.5, g: voice.gain * 0.6 });
     else if (voice.wave === "sine") this.tone({ ...common, f: f * 2, g: voice.gain * 0.15 });
@@ -427,7 +510,13 @@ export class Sonifier {
     const s = this.state;
     const r = Math.random;
     const spread = () => clamp(s.pan + (r() - 0.5) * 1.2, -1, 1);
-    const bus = g.nature;
+    const bus = g.textureIn;
+
+    if (!this.natural) {
+      this.texture(t);
+      this.accent(t, spread());
+      return;
+    }
 
     switch (this.profile.texture) {
       case "rain": {
@@ -465,11 +554,97 @@ export class Sonifier {
 
     // Campanitas de cristal: el dato secundario (frío extremo, nieve, aire contaminado…).
     if (r() < s.secondary * 0.15) {
-      const f = hz(86 - 5 * Math.floor(r() * 3) + PENTA[Math.floor(r() * 5)]!);
+      const midi = 86 - 5 * Math.floor(r() * 3) + PENTA[Math.floor(r() * 5)]!;
       const pan = spread();
-      this.tone({ t, f, dur: 1.3, g: 0.07, pan, bus });
-      this.tone({ t, f: f * 2.76, dur: 0.5, g: 0.02, pan, bus });
+      const bells = this.inst.get(this.palette.accent);
+      if (!bells || !playSample(bells, { t, dest: bus, midi, gain: 0.12, pan, dur: 1.6 })) {
+        const f = hz(midi);
+        this.tone({ t, f, dur: 1.3, g: 0.07, pan, bus });
+        this.tone({ t, f: f * 2.76, dur: 0.5, g: 0.02, pan, bus });
+      }
     }
+  }
+
+  /**
+   * Textura musical de los datasets que no son de naturaleza, en el intervalo de
+   * `GRAIN_EVERY` que empieza en `t`. Crece con la intensidad del dato.
+   */
+  private texture(t: number) {
+    const g = this.g;
+    const tex = this.palette.texture;
+    if (!g || !("inst" in tex)) return;
+    const inst = this.inst.get(tex.inst);
+    if (!inst) return;
+    const s = this.state;
+    const r = Math.random;
+    const I = s.intensity;
+    const bus = g.textureIn;
+    const spread = () => clamp(s.pan + (r() - 0.5) * 1.2, -1, 1);
+    const base = s.midi + this.palette.shift;
+
+    switch (tex.kind) {
+      case "drone": {
+        // Nota larga que se repite; con acorde, más voces cuanto más intenso.
+        if (t < this.nextDrone) return;
+        this.nextDrone = t + tex.every;
+        const dur = tex.every + 1.5;
+        const gain = 0.08 + 0.3 * I;
+        const root = tex.shift == null ? undefined : s.midi + tex.shift;
+        // Sin el golpe inicial de la muestra y con fundido: cada repetición se encadena
+        // con la anterior (se solapan 1.5 s) y no se oye un "pum" cada vez.
+        const smooth = { offset: 0.6, fadeIn: 1.2 };
+        playSample(inst, { t, dest: bus, midi: root, gain, pan: s.pan * 0.5, dur, ...smooth });
+        if (tex.chord && root != null && I > 0.35) playSample(inst, { t, dest: bus, midi: root + 7, gain: gain * 0.7, pan: -s.pan * 0.3, dur, ...smooth });
+        if (tex.chord && root != null && I > 0.7) playSample(inst, { t, dest: bus, midi: root + 12, gain: gain * 0.6, pan: s.pan * 0.3, dur, ...smooth });
+        break;
+      }
+      case "pulse":
+        // Golpes en la rejilla: con poca contaminación, pocos; con mucha, casi todos.
+        if (r() < 0.12 + 0.8 * I) playSample(inst, { t, dest: bus, gain: 0.12 + 0.18 * I, pan: spread() });
+        break;
+      case "grains": {
+        const n = Math.round(I * 4 + r() * 0.8);
+        for (let k = 0; k < n; k++) playSample(inst, { t: t + r() * GRAIN_EVERY, dest: bus, gain: 0.05 + 0.08 * r(), pan: spread() });
+        break;
+      }
+      case "shimmer": {
+        // Dos copas casi iguales: la diferencia (y el "batido") crece con el dato.
+        if (t < this.nextShimmer) return;
+        this.nextShimmer = t + 2.5;
+        const gain = 0.06 + 0.16 * I;
+        playSample(inst, { t, dest: bus, midi: base, gain, pan: -0.3, dur: 3.2 });
+        playSample(inst, { t, dest: bus, midi: base, gain, pan: 0.3, dur: 3.2, detune: 6 + 40 * I });
+        break;
+      }
+      case "arpeggio":
+        if (r() < 0.15 + 0.7 * I) {
+          const step = [0, 2, 4, 7, 9, 12][Math.floor(r() * 6)]!;
+          playSample(inst, { t, dest: bus, midi: base + step, gain: 0.08 + 0.1 * I, pan: spread(), dur: 2 });
+        }
+        break;
+      case "plucks": {
+        const n = r() < 0.2 + 0.7 * I ? 1 + Math.round(I * 2 * r()) : 0;
+        for (let k = 0; k < n; k++) {
+          const midi = 72 + 12 * Math.floor(r() * 2) + PENTA[Math.floor(r() * 5)]!;
+          playSample(inst, { t: t + r() * GRAIN_EVERY, dest: bus, midi, gain: 0.07 + 0.08 * r(), pan: spread(), dur: 1.5 });
+        }
+        break;
+      }
+      case "chimes":
+        if (r() < 0.02 + 0.1 * I) playSample(inst, { t, dest: bus, gain: 0.06 + 0.1 * I, pan: spread(), dur: 4 });
+        break;
+    }
+  }
+
+  /** Golpe del dato secundario (campana, timbal…), de vez en cuando. */
+  private accent(t: number, pan: number) {
+    const g = this.g;
+    const s = this.state;
+    if (!g || Math.random() >= s.secondary * 0.05) return;
+    const inst = this.inst.get(this.palette.accent);
+    if (!inst) return;
+    const midi = 84 + PENTA[Math.floor(Math.random() * 5)]!;
+    playSample(inst, { t, dest: g.textureIn, midi, gain: 0.14, pan, dur: 3 });
   }
 
   private tone(o: { t: number; f: number; dur: number; g: number; pan: number; bus: AudioNode; wave?: OscillatorType; attack?: number }) {

@@ -1,0 +1,542 @@
+{
+ "kalimba": [
+  {
+   "file": "n47.mp3",
+   "note": 47,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_B2_k8_vl3_rr2.wav"
+  },
+  {
+   "file": "n51.mp3",
+   "note": 51,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_D#3_k6_vl3_rr2.wav"
+  },
+  {
+   "file": "n54.mp3",
+   "note": 54,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_F#3_k10_vl3_rr2.wav"
+  },
+  {
+   "file": "n59.mp3",
+   "note": 59,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2.wav"
+  },
+  {
+   "file": "n63.mp3",
+   "note": 63,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_D#4_k13_vl3_rr2.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_F#4_k14_vl3_rr2.wav"
+  },
+  {
+   "file": "n69.mp3",
+   "note": 69,
+   "source": "Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_A4_k1_vl3_rr2.wav"
+  }
+ ],
+ "marimba": [
+  {
+   "file": "n36.mp3",
+   "note": 36,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C2_med_01.wav"
+  },
+  {
+   "file": "n43.mp3",
+   "note": 43,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_G2_med_01.wav"
+  },
+  {
+   "file": "n53.mp3",
+   "note": 53,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_F3_med_01.wav"
+  },
+  {
+   "file": "n60.mp3",
+   "note": 60,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C4_med_01.wav"
+  },
+  {
+   "file": "n67.mp3",
+   "note": 67,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_G4_med_01.wav"
+  },
+  {
+   "file": "n77.mp3",
+   "note": 77,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_F5_med_01.wav"
+  },
+  {
+   "file": "n84.mp3",
+   "note": 84,
+   "source": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C6_med_01.wav"
+  }
+ ],
+ "harp": [
+  {
+   "file": "n41.mp3",
+   "note": 41,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_F2_mf1.wav"
+  },
+  {
+   "file": "n48.mp3",
+   "note": 48,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_C3_mf3.wav"
+  },
+  {
+   "file": "n55.mp3",
+   "note": 55,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_G3_mf1.wav"
+  },
+  {
+   "file": "n62.mp3",
+   "note": 62,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_D4_mf1.wav"
+  },
+  {
+   "file": "n69.mp3",
+   "note": 69,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_A4_mf1.wav"
+  },
+  {
+   "file": "n76.mp3",
+   "note": 76,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_E5_mf1.wav"
+  },
+  {
+   "file": "n83.mp3",
+   "note": 83,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_B5_mf1.wav"
+  },
+  {
+   "file": "n89.mp3",
+   "note": 89,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_F6_mf1.wav"
+  },
+  {
+   "file": "n95.mp3",
+   "note": 95,
+   "source": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_B6_mf1.wav"
+  }
+ ],
+ "glock": [
+  {
+   "file": "n67.mp3",
+   "note": 67,
+   "source": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G4_01.wav"
+  },
+  {
+   "file": "n72.mp3",
+   "note": 72,
+   "source": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C5_01.wav"
+  },
+  {
+   "file": "n79.mp3",
+   "note": 79,
+   "source": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G5_01.wav"
+  },
+  {
+   "file": "n84.mp3",
+   "note": 84,
+   "source": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C6_01.wav"
+  },
+  {
+   "file": "n91.mp3",
+   "note": 91,
+   "source": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G6_01.wav"
+  },
+  {
+   "file": "n96.mp3",
+   "note": 96,
+   "source": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C7_01.wav"
+  }
+ ],
+ "vibes": [
+  {
+   "file": "n41.mp3",
+   "note": 41,
+   "source": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_F2_v2_rr1_Main.wav"
+  },
+  {
+   "file": "n48.mp3",
+   "note": 48,
+   "source": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_C3_v2_rr1_Main.wav"
+  },
+  {
+   "file": "n55.mp3",
+   "note": 55,
+   "source": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_G3_v2_rr1_Main.wav"
+  },
+  {
+   "file": "n62.mp3",
+   "note": 62,
+   "source": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_D4_v2_rr1_Main.wav"
+  },
+  {
+   "file": "n69.mp3",
+   "note": 69,
+   "source": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_A4_v2_rr1_Main.wav"
+  },
+  {
+   "file": "n76.mp3",
+   "note": 76,
+   "source": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_E5_v2_rr1_Main.wav"
+  }
+ ],
+ "xylo": [
+  {
+   "file": "n55.mp3",
+   "note": 55,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_G3_pp_01_far.wav"
+  },
+  {
+   "file": "n60.mp3",
+   "note": 60,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_C4_pp_01_far.wav"
+  },
+  {
+   "file": "n67.mp3",
+   "note": 67,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_G4_pp_01_far.wav"
+  },
+  {
+   "file": "n72.mp3",
+   "note": 72,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_C5_pp_01_far.wav"
+  },
+  {
+   "file": "n79.mp3",
+   "note": 79,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_G5_pp_01_far.wav"
+  },
+  {
+   "file": "n84.mp3",
+   "note": 84,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_C6_pp_01_far.wav"
+  },
+  {
+   "file": "n91.mp3",
+   "note": 91,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_G6_pp_01_far.wav"
+  },
+  {
+   "file": "n96.mp3",
+   "note": 96,
+   "source": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_C7_pp_01_far.wav"
+  }
+ ],
+ "saxello": [
+  {
+   "file": "n46.mp3",
+   "note": 46,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_A#2_vl2_rr2.wav"
+  },
+  {
+   "file": "n50.mp3",
+   "note": 50,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_D3_vl2_rr2.wav"
+  },
+  {
+   "file": "n54.mp3",
+   "note": 54,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_F#3_vl2_rr2.wav"
+  },
+  {
+   "file": "n58.mp3",
+   "note": 58,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_A#3_vl2_rr2.wav"
+  },
+  {
+   "file": "n62.mp3",
+   "note": 62,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_D4_vl2_rr2.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_F#4_vl2_rr2.wav"
+  },
+  {
+   "file": "n70.mp3",
+   "note": 70,
+   "source": "Aerophones/Reed Aerophones/Saxello/Non-Vibrato/BrettSaxello_SusNV_MainSpirit_A#4_vl2_rr2.wav"
+  },
+  {
+   "file": "n75.mp3",
+   "note": 75,
+   "source": "Aerophones/Reed Aerophones/Saxello/Vibrato/BrettSaxello_SusVB_MainSpirit_D#5_vl2_rr1.wav"
+  }
+ ],
+ "organ": [
+  {
+   "file": "n36.mp3",
+   "note": 36,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C2.wav"
+  },
+  {
+   "file": "n42.mp3",
+   "note": 42,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#2.wav"
+  },
+  {
+   "file": "n48.mp3",
+   "note": 48,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C3.wav"
+  },
+  {
+   "file": "n54.mp3",
+   "note": 54,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#3.wav"
+  },
+  {
+   "file": "n60.mp3",
+   "note": 60,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C4.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#4.wav"
+  },
+  {
+   "file": "n72.mp3",
+   "note": 72,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C5.wav"
+  },
+  {
+   "file": "n78.mp3",
+   "note": 78,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#5.wav"
+  },
+  {
+   "file": "n84.mp3",
+   "note": 84,
+   "source": "Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C6.wav"
+  }
+ ],
+ "recorder": [
+  {
+   "file": "n53.mp3",
+   "note": 53,
+   "source": "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/SusVib/AltRecorder_SusVib_F3_rr1_Main.wav"
+  },
+  {
+   "file": "n58.mp3",
+   "note": 58,
+   "source": "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/SusVib/AltRecorder_SusVib_A#3_rr1_Main.wav"
+  },
+  {
+   "file": "n62.mp3",
+   "note": 62,
+   "source": "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/SusVib/AltRecorder_SusVib_D4_rr1_Main.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/SusVib/AltRecorder_SusVib_F#4_rr1_Main.wav"
+  },
+  {
+   "file": "n70.mp3",
+   "note": 70,
+   "source": "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/SusVib/AltRecorder_SusVib_A#4_rr1_Main.wav"
+  },
+  {
+   "file": "n74.mp3",
+   "note": 74,
+   "source": "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/SusVib/AltRecorder_SusVib_D5_rr1_Main.wav"
+  }
+ ],
+ "glass": [
+  {
+   "file": "n63.mp3",
+   "note": 63,
+   "source": "Idiophones/Friction Idiophones/Wine Glasses/Sustains/Slow/glass1_D#4_Slow_1_Main.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Idiophones/Friction Idiophones/Wine Glasses/Sustains/Slow/glass2_F#4_Slow_1_Main.wav"
+  },
+  {
+   "file": "n70.mp3",
+   "note": 70,
+   "source": "Idiophones/Friction Idiophones/Wine Glasses/Sustains/Slow/glass3_A#4_Slow_1_Main.wav"
+  },
+  {
+   "file": "n74.mp3",
+   "note": 74,
+   "source": "Idiophones/Friction Idiophones/Wine Glasses/Sustains/Slow/glass4_D5_Slow_2_Main.wav"
+  }
+ ],
+ "psaltery-bow": [
+  {
+   "file": "n58.mp3",
+   "note": 58,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/LongBow/BowedPsaltery_A#3_Main_LongBow_rr2.wav"
+  },
+  {
+   "file": "n62.mp3",
+   "note": 62,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/LongBow/BowedPsaltery_D4_Main_LongBow_rr1.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/LongBow/BowedPsaltery_F#4_Main_LongBow_rr1.wav"
+  },
+  {
+   "file": "n70.mp3",
+   "note": 70,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/LongBow/BowedPsaltery_A#4_Main_LongBow_rr2.wav"
+  },
+  {
+   "file": "n74.mp3",
+   "note": 74,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/LongBow/BowedPsaltery_D5_Main_LongBow_rr2.wav"
+  },
+  {
+   "file": "n78.mp3",
+   "note": 78,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/LongBow/BowedPsaltery_F#5_Main_LongBow_rr2.wav"
+  }
+ ],
+ "psaltery-pluck": [
+  {
+   "file": "n58.mp3",
+   "note": 58,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/Pluck/BowedPsaltery_A#3_Main_Pluck_rr1.wav"
+  },
+  {
+   "file": "n62.mp3",
+   "note": 62,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/Pluck/BowedPsaltery_D4_Main_Pluck_rr1.wav"
+  },
+  {
+   "file": "n66.mp3",
+   "note": 66,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/Pluck/BowedPsaltery_F#4_Main_Pluck_rr1.wav"
+  },
+  {
+   "file": "n70.mp3",
+   "note": 70,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/Pluck/BowedPsaltery_A#4_Main_Pluck_rr1.wav"
+  },
+  {
+   "file": "n74.mp3",
+   "note": 74,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/Pluck/BowedPsaltery_D5_Main_Pluck_rr1.wav"
+  },
+  {
+   "file": "n78.mp3",
+   "note": 78,
+   "source": "Chordophones/Zithers/Psaltery, Bowed and Plucked/Pluck/BowedPsaltery_F#5_Main_Pluck_rr3.wav"
+  }
+ ],
+ "didgeridoo": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Aerophones/Lip Aerophones/Didgeridoo/Didgeridoo1_Sus2_Main.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Aerophones/Lip Aerophones/Didgeridoo/Didgeridoo1_Sus3_Main.wav"
+  }
+ ],
+ "woodblock": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Woodblock/wood_click_mp.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Woodblock/wood_click_pp_rr1.wav"
+  },
+  {
+   "file": "h3.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Woodblock/wood_click2_mp.wav"
+  }
+ ],
+ "shaker": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerHighFaster_Down_rr1.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerHighFaster_Up_rr1.wav"
+  },
+  {
+   "file": "h3.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerLowFaster_Down_rr1.wav"
+  }
+ ],
+ "cabasa": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Cabasa/Cabasa1_Hit_rr1_Mid.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Cabasa/Cabasa1_Hit_rr2_Mid.wav"
+  }
+ ],
+ "handbell": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Hand Bells, Nepalese/HB_1.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Hand Bells, Nepalese/HB_2.wav"
+  },
+  {
+   "file": "h3.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Hand Bells, Nepalese/HB_3.wav"
+  }
+ ],
+ "timpani": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Membranophones/Struck Membranophones/Timpani 1/Hit/Timpani1_Hit_v3_rr3_Sum.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Membranophones/Struck Membranophones/Timpani 1/Hit/Timpani2_Hit_v3_rr1_Sum.wav"
+  }
+ ],
+ "chimes": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_random.wav"
+  },
+  {
+   "file": "h2.mp3",
+   "note": null,
+   "source": "Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_slowDesc1.wav"
+  }
+ ],
+ "ocean-drum": [
+  {
+   "file": "h1.mp3",
+   "note": null,
+   "source": "Membranophones/Other Membranophones/Ocean Drum/OceanDrum_Sus_1_Mid.wav"
+  }
+ ]
+}

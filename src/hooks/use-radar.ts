@@ -12,6 +12,8 @@ interface RadarOptions {
   bands: DataBand[];
   /** 0–100 (0 = silencio). */
   volume: number;
+  /** Perfil del motor: con qué instrumento suena el radar (`palettes.ts`). */
+  profileId: string | null;
   /** Posición de la flecha (en pasos) y anillos que alcanza, para dibujarla sobre el mapa. */
   onArrow: (pos: number, reach: number) => void;
 }
@@ -21,7 +23,7 @@ interface RadarOptions {
  * (que sigue al cursor sobre el mapa) y suena los niveles del dato que encuentra.
  * Se maneja con el ratón sobre el mapa y con el teclado; no necesita vista.
  */
-export function useRadar({ active, grid, bands, volume, onArrow }: RadarOptions) {
+export function useRadar({ active, grid, bands, volume, profileId, onArrow }: RadarOptions) {
   const [explorer] = useState(() => new Explorer());
   const [playing, setPlaying] = useState(false);
 
@@ -32,6 +34,7 @@ export function useRadar({ active, grid, bands, volume, onArrow }: RadarOptions)
   useEffect(() => explorer.setGrid(grid), [explorer, grid]);
   useEffect(() => explorer.setBands(bands), [explorer, bands]);
   useEffect(() => explorer.setVolume(volume), [explorer, volume]);
+  useEffect(() => explorer.setPalette(profileId), [explorer, profileId]);
   useEffect(() => {
     if (!active) explorer.pause();
   }, [explorer, active]);

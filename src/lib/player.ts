@@ -5,6 +5,7 @@
  */
 import { frameUrl } from "@/lib/api/frames";
 import type { Frame, PlaylistDetail, TrackDetail } from "@/lib/api/types";
+import { FULL_IMAGE, type DataRegion } from "@/lib/geo/projection";
 import type { ScaledFeature, SoundProfile } from "@/lib/sound/sonifier";
 
 /** Segundos que se muestra cada frame durante la reproducción. */
@@ -52,6 +53,8 @@ export interface PlayerData {
     lonRange: [number, number];
     /** Rango de valores de la cuadrícula, para normalizar el sonido. */
     valueRange: [number, number] | null;
+    /** Recuadro de la imagen que cubre la cuadrícula del motor (ver `dataRegion`). */
+    dataRegion: DataRegion;
     /** Qué se oye, en palabras del motor (`hints.words`). */
     listening: { melody: string | null; strong: string | null; secondary: string | null; subject: string | null };
   };
@@ -185,6 +188,23 @@ function landShare(frame: Frame, valueRange: [number, number] | null): number | 
   return total > 0 ? land / total : null;
 }
 
+/**
+ * `data_region` de los perfiles que recortan la imagen antes de medirla, para las
+ * tracks ingestadas antes de que el motor lo publicara en `engine_metadata`.
+ */
+const KNOWN_DATA_REGIONS: Record<string, DataRegion> = {
+  "globe-co2": [0.078, 0.058, 0.921, 0.901],
+};
+
+/** Recuadro que cubre la cuadrícula: el que publica el motor, el conocido del perfil o la imagen entera. */
+function dataRegion(engine: TrackDetail["engine_metadata"], profileId: string | null): DataRegion {
+  const r = engine.data_region;
+  if (Array.isArray(r) && r.length === 4 && r.every((n) => typeof n === "number" && Number.isFinite(n)) && r[2] > r[0] && r[3] > r[1]) {
+    return [r[0], r[1], r[2], r[3]];
+  }
+  return (profileId && KNOWN_DATA_REGIONS[profileId]) || FULL_IMAGE;
+}
+
 const MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
 function frameLabel(date: string | undefined, index: number): string {
@@ -281,11 +301,13 @@ export function toPlayerData(playlist: PlaylistDetail, track: TrackDetail): Play
       latRange: pair(engine.lat_range) ?? [90, -90],
       lonRange: pair(engine.lon_range) ?? [-180, 180],
       valueRange,
+      dataRegion: dataRegion(engine, str(track.source_metadata.profile_id)),
       listening: { melody: str(words.melody), strong: str(words.strong), secondary: str(words.secondary), subject: str(words.subject) },
     },
     frames,
     meters,
     sound: {
+      profileId: str(track.source_metadata.profile_id),
       melody: scaled(melodyHint.feature, melodyHint.range) ?? scaled(hints.level),
       intensity: scaled(hints.intensity),
       secondary: scaled(hints.secondary),

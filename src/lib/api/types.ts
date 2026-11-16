@@ -91,6 +91,11 @@ export interface EngineMetadata {
   /** Longitudes del borde izquierdo y derecho del mapa. */
   lon_range?: [number, number];
   value_range?: [number, number];
+  /**
+   * Parte de la imagen que mide el motor `(left, top, right, bottom)`, en fracción
+   * (0–1). La cuadrícula y `lat_range`/`lon_range` se refieren a ese recuadro.
+   */
+  data_region?: [number, number, number, number];
   hints?: EngineHints;
   feature_stats?: Record<string, { min: number; max: number }>;
   warnings?: string[];
