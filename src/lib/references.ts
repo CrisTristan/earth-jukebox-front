@@ -190,3 +190,9 @@ export const STACK: { side: "Frontend" | "Backend"; items: StackItem[] }[] = [
     ],
   },
 ];
+
+/** Repositorios del proyecto en GitHub (`owner/name`), en el mismo orden que `STACK`. */
+export const REPOS: { side: "Frontend" | "Backend"; repo: string; description: string }[] = [
+  { side: "Frontend", repo: "CrisTristan/earth-jukebox-front", description: "Next.js app: globe, player and voice guide" },
+  { side: "Backend", repo: "IanDiaz05/earth-jukebox", description: "FastAPI service that measures NASA frames" },
+];

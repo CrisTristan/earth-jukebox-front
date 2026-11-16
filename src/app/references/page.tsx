@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import {
+  ArrowUpRight,
   Container,
   Database,
+  Github,
   Library,
   Map as MapIcon,
   Music,
@@ -15,7 +17,7 @@ import {
 } from "lucide-react";
 import { ExternalLink } from "@/components/external-link";
 import { PageShell } from "@/components/page-shell";
-import { EXTERNAL_SERVICES, OWN_API, STACK, type ExternalService, type ServiceIcon } from "@/lib/references";
+import { EXTERNAL_SERVICES, OWN_API, REPOS, STACK, type ExternalService, type ServiceIcon } from "@/lib/references";
 
 export const metadata: Metadata = {
   title: "References — Earth Jukebox",
@@ -114,6 +116,14 @@ export default function ReferencesPage() {
             </div>
           ))}
         </div>
+
+        <ul className="mt-5 grid gap-5 md:grid-cols-2">
+          {REPOS.map((repo) => (
+            <li key={repo.repo} className="flex">
+              <RepoCard {...repo} />
+            </li>
+          ))}
+        </ul>
       </section>
 
       <p className="mt-16 text-center text-xs leading-relaxed text-glass-muted">
@@ -155,6 +165,41 @@ function ServiceCard({ service: s }: { service: ExternalService }) {
         ))}
       </p>
     </article>
+  );
+}
+
+function RepoCard({ side, repo, description }: (typeof REPOS)[number]) {
+  const [owner, name] = repo.split("/");
+  return (
+    <ExternalLink
+      href={`https://github.com/${repo}`}
+      label={`${side} repository on GitHub`}
+      noArrow
+      className={`${CARD} group relative flex w-full items-center gap-4 overflow-hidden p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-400/40`}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-linear-to-br from-emerald-400/10 via-transparent to-teal-400/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+      />
+      <span
+        aria-hidden
+        className="relative grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 transition-colors duration-300 group-hover:border-emerald-400/40 group-hover:bg-emerald-400/10"
+      >
+        <Github className="h-5 w-5 text-glass transition-colors group-hover:text-emerald-300" />
+      </span>
+      <span className="relative min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">{side} repository</span>
+        <span className="mt-1 block truncate font-mono text-sm font-semibold">
+          <span className="text-glass-muted">{owner}/</span>
+          {name}
+        </span>
+        <span className="mt-1 block text-xs text-glass-muted">{description}</span>
+      </span>
+      <ArrowUpRight
+        aria-hidden
+        className="relative h-5 w-5 shrink-0 text-glass-muted transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-emerald-300"
+      />
+    </ExternalLink>
   );
 }
 
