@@ -5,10 +5,10 @@
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3,
+  ArrowLeft, Globe as GlobeIcon, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3,
 } from "lucide-react";
 import { useRadar } from "@/hooks/use-radar";
-import { analyze, originText, RESOLUTIONS, type Cell } from "@/lib/explore/disc";
+import { analyze, classify, originText, RESOLUTIONS, type Cell } from "@/lib/explore/disc";
 import { VOICES } from "@/lib/explore/explorer";
 import { useDrawerSwipe } from "@/hooks/use-drawer-swipe";
 import { MOBILE_LANDSCAPE, useMediaQuery } from "@/hooks/use-media-query";
@@ -61,23 +61,15 @@ interface Sampler {
 }
 
 /**
- * Qué hay en (u, v) de la imagen del frame, solo según el dato: el nivel en que
- * cae su valor (umbrales del dataset) y el valor normalizado (percentiles 5–95).
- * Sin dato, fuera del mapa o fuera del planeta: `band: null` (silencio). En los
- * datasets donde la falta de dato es cero (lluvia, rayos) cuenta como el nivel más bajo.
+ * Qué hay en (u, v) de la imagen del frame (ver `classify`). En un globo, lo que
+ * cae fuera del planeta también es `band: null` (silencio).
  */
 function sampleFrame(s: Sampler, u: number, v: number): Cell {
-  const none = { band: null, value: null };
-  if (u < 0 || u > 1 || v < 0 || v > 1) return none;
-  if (s.globe) {
+  if (s.globe && u >= 0 && u <= 1 && v >= 0 && v <= 1) {
     const hit = globeAt(s.globe, s.frame.id, u, v, s.aspect);
-    if (!hit || hit === "space") return none;
+    if (!hit || hit === "space") return { band: null, value: null };
   }
-  const raw = gridValue(s.frame.grid, u, v, s.region);
-  if (raw == null) return s.levels.missingIsZero && s.frame.grid ? { band: 0, value: 0 } : none;
-  const sc = s.scale;
-  const value = sc ? Math.max(0, Math.min(1, (raw - sc.low) / (sc.top - sc.low))) : null;
-  return { band: s.levels.cuts.filter((c) => raw >= c).length, value };
+  return classify(s.frame.grid, u, v, s.scale, s.levels, s.region);
 }
 
 export function TrackPlayer({ data }: { data: PlayerData }) {
@@ -659,6 +651,9 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <Disc3 className="h-4 w-4" />
             </button>
             <VoiceSettings variant="icon" className="glass-light rounded-full p-2" />
+            {data.globeHref && (
+              <Link href={data.globeHref} aria-label="View on globe" title="View on globe" className="glass-light rounded-full p-2"><GlobeIcon className="h-4 w-4" /></Link>
+            )}
             <button onClick={() => setInfo(true)} aria-label="Track info" className="glass-light rounded-full p-2"><Info className="h-4 w-4" /></button>
           </div>
         </footer>
