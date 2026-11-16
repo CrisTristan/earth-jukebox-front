@@ -84,7 +84,7 @@ export function VoiceSettings({ variant, className = "" }: { variant: Variant; c
         <div
           id={panelId}
           data-voice-section="Voice guide settings"
-          className={`glass-strong jb-enter z-50 w-72 rounded-2xl p-4 text-left normal-case tracking-normal ${PANEL_POSITION[variant]}`}
+          className={`glass-strong jb-enter z-50 w-72 rounded-lg p-4 text-left normal-case tracking-normal ${PANEL_POSITION[variant]}`}
         >
           <fieldset>
             <legend className="px-1 text-[10px] font-semibold uppercase tracking-widest text-glass-muted">Voice guide</legend>

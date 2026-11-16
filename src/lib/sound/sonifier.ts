@@ -71,11 +71,28 @@ export function normalized(scale: ScaledFeature | null, features: Record<string,
   return Math.abs(span) < 1e-12 ? 0.5 : (v - scale.min) / span;
 }
 
+/** 0–1 → grado de la escala pentatónica (0–10). */
+const degreeFor = (v: number) => clamp(Math.round(clamp(v, -0.1, 1.1) * 10), 0, 10);
+
+/** Grado pentatónico (puede pasar de 10) → nota MIDI, desde C4 (60). */
+const midiOfDegree = (d: number) => 60 + 12 * Math.floor(d / 5) + PENTA[((d % 5) + 5) % 5]!;
+
 /** 0–1 → nota MIDI pentatónica entre C4 (60) y C6 (84). */
 export function noteFor(v: number): number {
-  const step = clamp(Math.round(clamp(v, -0.1, 1.1) * 10), 0, 10);
-  return 60 + 12 * Math.floor(step / 5) + PENTA[step % 5]!;
+  return midiOfDegree(degreeFor(v));
 }
+
+/**
+ * Grados que se suman a la nota del dato en cada nota de un frame, por preset. La
+ * primera (0) es siempre la del dato; las demás la adornan dentro de la escala, para
+ * que un dato que casi no cambia no suene como la misma nota una y otra vez.
+ */
+const MELODY_PATTERN: Record<Preset, readonly number[]> = {
+  Ambient: [0, 2],
+  Pulsing: [0, 1, 2, 1],
+  Orchestral: [0],
+  Granular: [0],
+};
 
 /** Volumen de cada cama de naturaleza (mismas proporciones que el prototipo). */
 const NATURE = { tierra: 1.5, agua: 0.62, nube: 0.34, hielo: 0.1 } as const;
@@ -99,6 +116,8 @@ const LOOKAHEAD = 0.2;
 
 interface FrameState {
   midi: number;
+  /** Grado pentatónico de la nota del dato (0–10). */
+  degree: number;
   /** Valor de la melodía en 0–1 (0.5 = centro, en los datos con centro). */
   melodyValue: number;
   pan: number;
@@ -142,7 +161,9 @@ export class Sonifier {
   private volume = 70;
   private layers: LayerMode = "Nature + music";
   private preset: Preset = "Ambient";
-  private state: FrameState = { midi: 67, melodyValue: 0.5, pan: 0, bright: 0.5, intensity: 0.4, secondary: 0, land: 0.5 };
+  /** Cuántas notas sonaron en el frame actual (la primera es la del dato). */
+  private noteIndex = 0;
+  private state: FrameState = { midi: 67, degree: 3, melodyValue: 0.5, pan: 0, bright: 0.5, intensity: 0.4, secondary: 0, land: 0.5 };
   private readonly palette: Palette;
   /** Instrumentos ya cargados para el contexto actual. */
   private inst = new Map<InstrumentId, Instrument>();
@@ -220,6 +241,7 @@ export class Sonifier {
     if (!g) return;
     const t = g.ctx.currentTime;
     this.state = this.stateOf(frame);
+    this.noteIndex = 0;
     this.applyBeds(t);
     this.nextNote = t + 0.03;
     if (!this.playing) {
@@ -263,6 +285,7 @@ export class Sonifier {
     if (!g) return;
     const t = g.ctx.currentTime;
     this.state = this.stateOf(frame);
+    this.noteIndex = 0;
     this.applyBeds(t);
     for (const bed of Object.values(g.beds)) bed.gain.gain.setTargetAtTime(0, t + 1.2, 0.3);
     this.melodyNote(t + 0.02, PRESET_VOICE.Ambient);
@@ -318,6 +341,7 @@ export class Sonifier {
     const melody = normalized(p.melody, features) ?? 0.5;
     return {
       midi: noteFor(melody),
+      degree: degreeFor(melody),
       melodyValue: clamp01(melody),
       intensity: clamp01(normalized(p.intensity, features) ?? 0.4),
       secondary: clamp01(normalized(p.secondary, features) ?? 0),
@@ -478,7 +502,12 @@ export class Sonifier {
     const g = this.g;
     if (!g) return;
     const s = this.state;
-    let midi = s.midi;
+    const pattern = MELODY_PATTERN[voice === PRESET_VOICE.Ambient ? "Ambient" : this.preset];
+    const step = pattern[this.noteIndex % pattern.length]!;
+    this.noteIndex++;
+    let midi = midiOfDegree(s.degree + step);
+    // El adorno suena más suave que la nota del dato.
+    const weight = step === 0 ? 1 : 0.55;
     let pan = s.pan;
     if (voice.scatter) {
       // Granular: la misma nota con algunos granos una octava arriba, repartidos en el estéreo.
@@ -490,7 +519,7 @@ export class Sonifier {
     const inst = this.inst.get(warm ? warm.inst : this.palette.melody);
     if (inst) {
       const note = midi + (warm ? warm.shift : this.palette.shift);
-      const gain = SAMPLE_GAIN[this.preset];
+      const gain = SAMPLE_GAIN[this.preset] * weight;
       const dur = Math.max(voice.dur, 0.12);
       playSample(inst, { t, dest: g.melodyIn, midi: note, gain, pan, dur });
       if (voice.fifth) playSample(inst, { t, dest: g.melodyIn, midi: note + 7, gain: gain * 0.6, pan, dur });
@@ -498,9 +527,9 @@ export class Sonifier {
     }
     const f = hz(midi);
     const common = { t, dur: voice.dur, pan, wave: voice.wave, attack: voice.attack, bus: g.melodyIn };
-    this.tone({ ...common, f, g: voice.gain });
-    if (voice.fifth) this.tone({ ...common, f: f * 1.5, g: voice.gain * 0.6 });
-    else if (voice.wave === "sine") this.tone({ ...common, f: f * 2, g: voice.gain * 0.15 });
+    this.tone({ ...common, f, g: voice.gain * weight });
+    if (voice.fifth) this.tone({ ...common, f: f * 1.5, g: voice.gain * weight * 0.6 });
+    else if (voice.wave === "sine") this.tone({ ...common, f: f * 2, g: voice.gain * weight * 0.15 });
   }
 
   /** Detalles de naturaleza en un intervalo de `GRAIN_EVERY` segundos. */

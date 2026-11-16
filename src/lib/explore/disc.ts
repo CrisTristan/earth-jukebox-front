@@ -120,32 +120,7 @@ export function composition(grid: DiscGrid, bands: number): { byBand: number[]; 
   return { byBand: byBand.map((n) => Math.round((n / total) * 100)), none: Math.round((none / total) * 100) };
 }
 
-const COMPASS = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"];
-
-/** Dirección del paso `j` (arriba = norte en los mapas planos). */
-export const direction = (j: number, steps: number) => COMPASS[Math.round((j / steps) * 8) % 8]!;
-
-/** "Step 3 of 48, northeast: humo denso, monóxido elevado. Data level 62 percent." — con los anillos al alcance de la flecha. */
-export function stepText(grid: DiscGrid, j: number, reach: number, bands: DataBand[]): string {
-  const c = new Map<number, number>();
-  let sum = 0;
-  let n = 0;
-  for (let i = 0; i < reach; i++) {
-    const cell = grid.cells[i]?.[j];
-    if (!cell) continue;
-    if (cell.band != null) c.set(cell.band, (c.get(cell.band) ?? 0) + 1);
-    if (cell.value != null) {
-      sum += cell.value;
-      n++;
-    }
-  }
-  // De más a menos celdas; con empate, primero el nivel más alto.
-  const found = [...c.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]).map(([band]) => bands[band]!.name);
-  const data = n ? ` Data level ${Math.round((sum / n) * 100)} percent.` : "";
-  return `Step ${j + 1} of ${grid.steps}, ${direction(j, grid.steps)}: ${found.length ? found.join(", ") : "no data"}.${data}`;
-}
-
-/** "Origin in humo denso (≥ 200 ppbv). Around, Low dominates, 58 percent." */
+/** "Origin in dense smoke (≥ 200 ppbv). Around, Low dominates, 58 percent." */
 export function originText(grid: DiscGrid, origin: Cell, bands: DataBand[]): string {
   const { byBand } = composition(grid, bands.length);
   const best = byBand.reduce((bi, v, i) => (v > byBand[bi]! ? i : bi), 0);

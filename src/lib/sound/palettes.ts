@@ -48,12 +48,12 @@ export interface Palette {
 }
 
 const NATURE: Palette = {
-  melody: "kalimba",
-  shift: -12,
+  melody: "harp",
+  shift: 0,
   texture: { kind: "nature" },
   accent: "glock",
-  radar: "kalimba",
-  radarShift: -12,
+  radar: "harp",
+  radarShift: 0,
   hear: null,
 };
 
