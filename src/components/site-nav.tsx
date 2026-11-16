@@ -60,7 +60,7 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
       <div className="flex h-16 items-center justify-between gap-3 px-4 md:gap-6 md:px-10">
         <Link href="/" className="flex shrink-0 items-center gap-2.5 self-stretch" aria-label="Earth Jukebox — Home">
           <Image
-            src="/logo/stack_underflow.jfif"
+            src="/logo/stack_underflow.jpg"
             alt=""
             width={640}
             height={640}
