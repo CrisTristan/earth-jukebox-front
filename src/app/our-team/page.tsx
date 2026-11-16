@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { Github } from "lucide-react";
+import { ExternalLink } from "@/components/external-link";
 import { SectionPage } from "@/components/section-page";
 
 export const metadata: Metadata = {
@@ -9,12 +11,12 @@ export const metadata: Metadata = {
 
 // Fotos en public/team_members
 const TEAM_MEMBERS = [
-  { name: "Cristian Abad", role: "Front-end Programming", photo: "/team_members/cris_abad.jpg" },
-  { name: "Hector", role: "Security", photo: "/team_members/hector.jpg" },
-  { name: "Ian Diaz", role: "Frame Conversion & REST API", photo: "/team_members/ian.jpg" },
-  { name: "Juan", role: "Image Transformation Engine", photo: "/team_members/juan.jpeg" },
-  { name: "Rafael Sosa", role: "Dataset Extraction &   Sonification", photo: "/team_members/rafael.jpg" },
-  { name: "Thao", role: "Front-end & Mascot Design", photo: "/team_members/tao.jpg" },
+  { name: "Cristian Abad", role: "Front-end Programming", photo: "/team_members/cris_abad.jpg", github: "CrisTristan" },
+  { name: "Hector", role: "Security", photo: "/team_members/hector.jpg", github: "hharieta" },
+  { name: "Ian Diaz", role: "Frame Conversion & REST API", photo: "/team_members/ian.jpg", github: "IanDiaz05" },
+  { name: "Juan", role: "Image Transformation Engine", photo: "/team_members/juan.jpeg", github: "juan-shmonk" },
+  { name: "Rafael Sosa", role: "Dataset Extraction &   Sonification", photo: "/team_members/rafael.jpg", github: "RAFAEL-SOSA-UH" },
+  { name: "Thao", role: "Front-end & Mascot Design", photo: "/team_members/tao.jpg", github: "Meomusie29" },
 ];
 
 export default function OurTeamPage() {
@@ -43,6 +45,16 @@ export default function OurTeamPage() {
               <p className="mt-3 text-xs uppercase leading-relaxed tracking-widest text-glass-muted">
                 {member.role}
               </p>
+              <hr className="my-4 border-white/15" />
+              <ExternalLink
+                href={`https://github.com/${member.github}`}
+                label={`${member.name} on GitHub`}
+                noArrow
+                className="inline-flex max-w-full items-center gap-2 rounded-full text-sm text-glass-muted transition hover:text-glass focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              >
+                <Github aria-hidden className="h-5 w-5 shrink-0" />
+                <span className="truncate">@{member.github}</span>
+              </ExternalLink>
             </div>
           </li>
         ))}
