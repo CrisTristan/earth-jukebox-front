@@ -67,8 +67,8 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
             preload
             className="h-full w-auto rounded-full object-cover"
           />
-          {/* En pantallas muy estrechas solo queda el logo, para no chocar con la barra de iconos */}
-          <span className="hidden text-sm font-bold uppercase tracking-[0.18em] min-[380px]:inline">Earth</span>
+          {/* En móvil se omite "Earth" para dejar sitio a la barra de iconos */}
+          <span className="hidden text-sm font-bold uppercase tracking-[0.18em] md:inline">Earth</span>
           <span className="hidden text-sm font-light text-glass-muted sm:inline">Jukebox</span>
         </Link>
 
@@ -124,7 +124,7 @@ function MobileNav({ pathname }: { pathname: string | null }) {
   const voice = useVoice();
 
   return (
-    <nav aria-label="Main" data-voice-section="Main navigation" className="ml-auto min-w-0 md:hidden">
+    <nav aria-label="Main" data-voice-section="Main navigation" className="mx-auto min-w-0 md:hidden">
       <ul className="flex items-center rounded-2xl border border-white/10 bg-linear-to-br from-white/9 to-white/2 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_30px_-10px_rgba(0,0,0,0.7)]">
         {NAV_LINKS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;

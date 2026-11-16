@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Compass, Hand, LocateFixed, Pause, Play, SkipBack, SkipForward, Smartphone, SquarePlay } from "lucide-react";
+import { ArrowLeft, Compass, Hand, LocateFixed, Pause, Play, SkipBack, SkipForward, Smartphone, SquarePlay, Volume2, VolumeX } from "lucide-react";
 import { GlobeViewer, type GlobeViewerHandle } from "@/components/globe/globe-viewer";
 import { Announce } from "@/components/voice/announce";
 import { VoiceSettings } from "@/components/voice/voice-settings";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlayback } from "@/hooks/use-playback";
+import { useRadar } from "@/hooks/use-radar";
+import { analyze, classify, RESOLUTIONS, type DiscGrid } from "@/lib/explore/disc";
+import type { GlobeView } from "@/lib/globe";
 import { requestOrientationPermission, supportsOrientation } from "@/lib/globe/controls/orientation-permission";
 import { GLOBE_ROOT } from "@/lib/globe/routes";
 import type { GlobeData } from "@/lib/globe/data";
 import type { ControlMode } from "@/lib/globe/types";
-import { SECONDS_PER_FRAME } from "@/lib/player";
+import { SECONDS_PER_FRAME, type DataBand } from "@/lib/player";
 import { themeStyle } from "@/lib/theme";
 
 /** Segundos finales de cada frame en los que se funde con el siguiente. */
@@ -20,33 +23,136 @@ const FADE_SECONDS = 1;
 const TILT_STEP = Math.PI / 36; // 5°
 const ZOOM_STEP = 0.9;
 
+/** Radio del círculo que suena, en fracción del lado corto de la pantalla (0.3 → 60vmin de diámetro). */
+const RADIUS = 0.3;
+const DISC = RESOLUTIONS[1];
+/** Como mucho, un recálculo del disco cada tantos ms mientras se mueve la cámara. */
+const REFRESH_MS = 120;
+const NO_BANDS: DataBand[] = [];
+const NO_ARROW = () => {};
+
 const BUTTON = "glass-light inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition hover:bg-white/25";
 
 /**
  * Globo interior a pantalla completa: reproduce los frames de una track en
  * secuencia (con fundido) y deja mirar alrededor arrastrando o, en el móvil,
  * moviendo el teléfono.
+ *
+ * Suena con el radar del reproductor: gira dentro de un círculo fijo en el centro
+ * de la pantalla y toca los niveles del dato que hay en esa zona del planeta. Al
+ * mirar a otro sitio (arrastrando o con el giroscopio) suena otra zona.
  */
 export function GlobePlayer({ data }: { data: GlobeData }) {
-  const { playlist, track, frames, bounds, playerHref } = data;
+  const { playlist, track, frames, bounds, playerHref, dataScale, dataBands, dataRegion } = data;
   const frameCount = frames.length;
   const duration = frameCount * SECONDS_PER_FRAME;
   const urls = useMemo(() => frames.map((f) => f.url), [frames]);
 
   const viewer = useRef<GlobeViewerHandle>(null);
-  const player = usePlayback(duration, frameCount > 1);
+  // Con radar, el timelapse arranca a la vez que el sonido; sin él, en cuanto se entra.
+  const player = usePlayback(duration, frameCount > 1 && !dataBands);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const touch = useMediaQuery("(pointer: coarse)");
 
   const [mode, setMode] = useState<ControlMode>("drag");
   const [notice, setNotice] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  const [vol, setVol] = useState(70);
+  const [muted, setMuted] = useState(false);
 
   const t = player.position;
   const index = Math.max(0, Math.min(Math.floor(t / SECONDS_PER_FRAME), frameCount - 1));
   const intoFrame = t - index * SECONDS_PER_FRAME;
   const blend = reducedMotion || frameCount < 2 ? 0 : Math.max(0, Math.min(1, (intoFrame - (SECONDS_PER_FRAME - FADE_SECONDS)) / FADE_SECONDS));
   const frame = frames[index];
+
+  // ---- Radar: lo que hay dentro del círculo fijo, leído sobre el globo ----
+  /** Foto de la vista (se renueva al mover la cámara, como mucho cada `REFRESH_MS`). */
+  const [view, setView] = useState<GlobeView | null>(null);
+  const [radarCanvas, setRadarCanvas] = useState<HTMLCanvasElement | null>(null);
+  const refreshTimer = useRef<number | undefined>(undefined);
+
+  /** Pide una foto nueva de la vista, agrupando los avisos seguidos (la cámara avisa en cada fotograma). */
+  const refreshView = () => {
+    if (refreshTimer.current !== undefined) return;
+    refreshTimer.current = window.setTimeout(() => {
+      refreshTimer.current = undefined;
+      setView(viewer.current?.view() ?? null);
+    }, REFRESH_MS);
+  };
+  useEffect(() => () => window.clearTimeout(refreshTimer.current), []);
+
+  const grid = frame?.grid ?? null;
+  const discGrid = useMemo((): DiscGrid | null => {
+    if (!view || !dataBands || !grid) return null;
+    // (u, w) es la posición en la pantalla (0–1): se pasa a coordenadas de la vista y de ahí al mapa.
+    const sample = (u: number, w: number) => {
+      const hit = view.mapAt(2 * u - 1, 1 - 2 * w);
+      return hit ? classify(grid, hit.u, hit.v, dataScale, dataBands, dataRegion) : { band: null, value: null };
+    };
+    return analyze(sample, { u: 0.5, v: 0.5, radius: RADIUS }, view.aspect, DISC.rings, DISC.steps);
+  }, [view, grid, dataScale, dataBands, dataRegion]);
+
+  const soundStarted = useRef(false);
+  const radar = useRadar({
+    active: !!dataBands,
+    grid: discGrid,
+    bands: dataBands?.bands ?? NO_BANDS,
+    volume: muted ? 0 : vol,
+    profileId: track.profileId,
+    onArrow: NO_ARROW,
+    canvas: radarCanvas,
+    onPlayingChange: (on) => {
+      // En cuanto el radar suena por primera vez, arranca también el timelapse.
+      if (!on || soundStarted.current) return;
+      soundStarted.current = true;
+      if (frameCount > 1) player.play();
+    },
+  });
+
+  // ---- Arranque del sonido (el navegador exige un gesto) ----
+  /** La persona quiere oír el radar (deja de quererlo al pausar). */
+  const [wantSound, setWantSound] = useState(true);
+
+  // Si ya se interactuó con el sitio (se llegó desde el reproductor), suena sin esperar.
+  const tryAutoStart = useEffectEvent(() => {
+    if (dataBands && navigator.userActivation?.hasBeenActive) radar.start();
+  });
+  useEffect(() => tryAutoStart(), []);
+
+  // Si no, el primer gesto (arrastrar el globo, una tecla…) lo arranca. Los botones lo hacen ellos mismos.
+  const onGesture = useEffectEvent((e: Event) => {
+    if (!dataBands || radar.playing || !wantSound) return;
+    if ((e.target as HTMLElement | null)?.closest?.("button, a, input")) return;
+    radar.start();
+  });
+  useEffect(() => {
+    const handler = (e: Event) => onGesture(e);
+    window.addEventListener("pointerup", handler, true);
+    window.addEventListener("keydown", handler, true);
+    return () => {
+      window.removeEventListener("pointerup", handler, true);
+      window.removeEventListener("keydown", handler, true);
+    };
+  }, []);
+
+  /** Play/pausa del timelapse y del radar a la vez. */
+  const togglePlay = () => {
+    if (player.isPlaying || radar.playing) {
+      player.pause();
+      radar.stop();
+      setWantSound(false);
+    } else {
+      if (frameCount > 1) player.play();
+      setWantSound(true);
+      if (dataBands) radar.start();
+    }
+  };
+
+  const toggleMute = () => {
+    setMuted(!muted);
+    setAnnouncement(muted ? "Sound on." : "Sound off.");
+  };
 
   const step = (delta: number) => {
     if (frameCount === 0) return;
@@ -83,7 +189,7 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
     switch (e.key) {
       case " ":
         if (onInteractive) return;
-        player.toggle();
+        togglePlay();
         break;
       case "ArrowLeft":
       case "ArrowRight":
@@ -105,6 +211,10 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
       case "R":
         viewer.current?.recenter();
         break;
+      case "s":
+      case "S":
+        toggleMute();
+        break;
       default:
         return;
     }
@@ -116,11 +226,12 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
   }, []);
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const playing = player.isPlaying || radar.playing;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black font-sans text-glass" style={themeStyle(track.profileId)}>
       <Announce
-        text={`Globe view of ${track.title}. ${frameCount} frames. Drag to look around, or use the arrow keys: left and right change the frame, up and down tilt the view. Press R to recenter.`}
+        text={`Globe view of ${track.title}. ${frameCount} frames. Drag to look around, or use the arrow keys: left and right change the frame, up and down tilt the view. Press R to recenter.${dataBands ? " A radar turns inside the circle in the middle of the screen and plays the levels of the data it finds there; look somewhere else to hear another region. Press S to mute." : ""}`}
       />
       <p aria-live="polite" className="sr-only">{announcement}</p>
 
@@ -137,9 +248,18 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
             setMode("drag");
             setNotice("No motion sensor found on this device. Drag to look around.");
           }}
+          onViewChange={refreshView}
           className="h-full w-full"
         />
       </section>
+
+      {/* Zona que suena: círculo fijo en el centro (el radar gira dentro). */}
+      {dataBands && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[60vmin] w-[60vmin] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+        />
+      )}
 
       {/* ---- Barra superior ---- */}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-linear-to-b from-black/60 to-transparent p-4 md:p-6">
@@ -160,6 +280,28 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
           <VoiceSettings variant="icon" className="glass-light rounded-full p-2" />
         </div>
       </header>
+
+      {/* Radar pequeño, fijo arriba a la derecha: lo que hay dentro del círculo y la flecha que lo recorre. */}
+      {dataBands && (
+        <canvas
+          ref={setRadarCanvas}
+          width={600}
+          height={600}
+          aria-hidden
+          className="pointer-events-none absolute right-4 top-20 h-24 w-24 rounded-full shadow-2xl ring-1 ring-white/25 md:right-6 md:top-24 md:h-28 md:w-28"
+        />
+      )}
+
+      {/* Solo si se abrió la URL directamente: el navegador no deja sonar sin un gesto. */}
+      {dataBands && !playing && wantSound && frameCount > 0 && (
+        <button
+          type="button"
+          onClick={togglePlay}
+          className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-3 rounded-full bg-white px-6 py-4 text-base font-semibold text-black shadow-2xl transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-400"
+        >
+          <Play className="h-5 w-5 fill-current" aria-hidden /> Play with sound
+        </button>
+      )}
 
       {notice && (
         <p role="status" className="glass absolute left-1/2 top-24 w-[min(92vw,28rem)] -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-sm">
@@ -183,6 +325,7 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
               {mode === "orientation" ? "Move your phone to look around" : "Drag to look around · scroll to zoom"}
             </p>
           </div>
+          {!dataBands && <p className="text-[11px] text-glass-muted">This dataset has no levels, so the radar has nothing to play.</p>}
 
           <div className="flex items-center gap-3 text-[11px] tabular-nums text-glass-muted">
             <span>{fmt(t)}</span>
@@ -207,16 +350,32 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
               </button>
               <button
                 type="button"
-                onClick={player.toggle}
+                onClick={togglePlay}
                 disabled={frameCount === 0}
-                aria-label={player.isPlaying ? "Pause" : "Play"}
+                aria-label={playing ? "Pause" : "Play"}
                 className="grid h-11 w-11 place-items-center rounded-full bg-white text-black shadow-lg transition hover:scale-105 disabled:opacity-50"
               >
-                {player.isPlaying ? <Pause aria-hidden className="h-5 w-5 fill-current" /> : <Play aria-hidden className="ml-0.5 h-5 w-5 fill-current" />}
+                {playing ? <Pause aria-hidden className="h-5 w-5 fill-current" /> : <Play aria-hidden className="ml-0.5 h-5 w-5 fill-current" />}
               </button>
               <button type="button" onClick={() => step(1)} aria-label="Next frame" className="text-glass-muted transition hover:scale-110 hover:text-glass">
                 <SkipForward aria-hidden className="h-5 w-5 fill-current" />
               </button>
+              {dataBands && (
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={toggleMute} aria-pressed={muted} aria-label="Mute sound (S)" className="text-glass-muted transition hover:text-glass">
+                    {muted ? <VolumeX aria-hidden className="h-4 w-4" /> : <Volume2 aria-hidden className="h-4 w-4" />}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={vol}
+                    onChange={(e) => { setVol(+e.target.value); setMuted(false); }}
+                    aria-label="Volume"
+                    className="hidden h-1 w-20 accent-white md:block"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

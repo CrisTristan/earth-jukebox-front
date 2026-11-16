@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { ArrowLeft, Globe } from "lucide-react";
 import { ApiErrorNotice } from "@/components/api-error-notice";
 import { CoverSkeleton } from "@/components/cover-image";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { GlobePlayer } from "@/components/globe/globe-player";
 import { PageShell } from "@/components/page-shell";
 import { getPlaylist, getTrack } from "@/lib/api/client";
@@ -64,7 +65,10 @@ async function GlobeLoader({ params }: { params: Promise<{ slug: string; track: 
 
 function GlobeSkeleton() {
   return (
-    <div className="fixed inset-0 bg-black" aria-busy="true" aria-label="Loading the globe">
+    <div className="fixed inset-0 bg-black" aria-busy="true">
+      <div className="absolute inset-0 grid place-items-center">
+        <LoadingSpinner label="Loading dataset…" />
+      </div>
       <CoverSkeleton className="absolute inset-x-3 bottom-3 h-36 rounded-3xl md:inset-x-auto md:left-1/2 md:w-[48rem] md:-translate-x-1/2" />
     </div>
   );

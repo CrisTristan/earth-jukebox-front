@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene, Timer, WebGLRenderer, type Mesh } from "three";
+import { MathUtils, PerspectiveCamera, Scene, Timer, Vector3, WebGLRenderer, type Mesh } from "three";
 import type { CameraControls } from "@/lib/globe/controls/types";
 import { CrossfadeMaterial } from "@/lib/globe/crossfade-material";
 import { FrameSequence } from "@/lib/globe/frame-sequence";
@@ -12,7 +12,26 @@ interface GlobeSceneOptions {
   preload?: number;
   /** Se llama cuando el frame pedido ya se ve (útil para quitar un "cargando"). */
   onFrameShown?: (index: number) => void;
+  /** Se llama cuando cambia lo que se ve: la cámara se movió o cambió el tamaño. */
+  onViewChange?: () => void;
 }
+
+/**
+ * Foto de lo que se ve en un instante: proporción de la vista y conversión de un
+ * punto de la vista a la imagen del frame. Es pura (no cambia aunque la cámara se mueva).
+ */
+export interface GlobeView {
+  aspect: number;
+  /**
+   * Punto de la vista (coordenadas normalizadas, -1…1, +Y arriba) → posición en la
+   * imagen del frame (`u`/`v` de 0 a 1, `v` = 0 arriba), o null si ahí no hay mapa
+   * (fuera de un mapa parcial).
+   */
+  mapAt(ndcX: number, ndcY: number): { u: number; v: number } | null;
+}
+
+const Y_AXIS = new Vector3(0, 1, 0);
+const TAU = Math.PI * 2;
 
 /** Segundos que tarda la mezcla en recorrer ~63 % de la distancia a su objetivo. */
 const BLEND_EASE = 0.12;
@@ -48,6 +67,7 @@ export class GlobeScene {
   private readonly resizeObserver: ResizeObserver;
   private readonly options: GlobeSceneOptions;
   private sphere: Mesh | null = null;
+  private bounds: GeoBounds | null = null;
   private sequence: FrameSequence | null = null;
   private controls: CameraControls | null = null;
   private wanted = { index: 0, blend: 0 };
@@ -100,11 +120,13 @@ export class GlobeScene {
       this.scene.remove(this.sphere);
       this.sphere.geometry.dispose();
     }
+    this.bounds = bounds;
     this.sphere = createInteriorSphere({ bounds, material: this.material });
     this.scene.add(this.sphere);
 
     this.shown = -1;
     this.applyFrame();
+    this.options.onViewChange?.();
   }
 
   /**
@@ -124,6 +146,47 @@ export class GlobeScene {
     this.controls?.dispose();
     this.controls = controls;
     this.dirty = true;
+  }
+
+
+  /**
+   * Foto de la vista actual (ver `GlobeView`), o null si aún no hay secuencia.
+   * Es analítica: la cámara está en el centro de la esfera, así que cada punto
+   * de la vista es solo la dirección de un rayo.
+   */
+  view(): GlobeView | null {
+    const sphere = this.sphere;
+    const bounds = this.bounds;
+    if (!sphere || !bounds) return null;
+    this.camera.updateMatrixWorld();
+    const unproject = this.camera.projectionMatrixInverse.clone();
+    const world = this.camera.matrixWorld.clone();
+    const eye = this.camera.position.clone();
+    const turn = -sphere.rotation.y;
+    const [latTop, latBottom] = bounds.latRange;
+    const [lonLeft, lonRight] = bounds.lonRange;
+    const phiStart = MathUtils.degToRad(lonLeft + 180);
+    const phiLength = MathUtils.degToRad(lonRight - lonLeft);
+    const thetaStart = MathUtils.degToRad(90 - latTop);
+    const thetaLength = MathUtils.degToRad(latTop - latBottom);
+    const d = new Vector3();
+
+    return {
+      aspect: this.camera.aspect,
+      mapAt(ndcX, ndcY) {
+        // Igual que `Vector3.unproject`, con las matrices de la foto.
+        d.set(ndcX, ndcY, 0.5).applyMatrix4(unproject).applyMatrix4(world).sub(eye);
+        // Al espacio de la esfera: deshace su giro sobre Y.
+        d.applyAxisAngle(Y_AXIS, turn).normalize();
+        // `SphereGeometry` pone x = -cos(phi)·sin(theta), y = cos(theta), z = sin(phi)·sin(theta),
+        // y `scale(-1, 1, 1)` cambia el signo de x (ver `createInteriorSphere`).
+        const theta = Math.acos(Math.max(-1, Math.min(1, d.y)));
+        const phi = Math.atan2(d.z, d.x);
+        const u = ((((phi - phiStart) % TAU) + TAU) % TAU) / phiLength;
+        const v = (theta - thetaStart) / thetaLength;
+        return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? { u, v } : null;
+      },
+    };
   }
 
   dispose(): void {
@@ -176,6 +239,7 @@ export class GlobeScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
     this.dirty = true;
+    this.options.onViewChange?.();
   }
 
   private tick(time: number): void {
@@ -183,6 +247,7 @@ export class GlobeScene {
     const dt = this.timer.getDelta();
     this.easeBlend(dt);
     const moved = this.controls?.update(this.camera, dt) ?? false;
+    if (moved) this.options.onViewChange?.();
     if (!moved && !this.dirty) return;
     this.dirty = false;
     if (this.material.ready) this.renderer.render(this.scene, this.camera);

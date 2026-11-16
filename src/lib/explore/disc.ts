@@ -7,7 +7,8 @@
  * elevado" ≥ 130 ppbv, "humo denso" ≥ 200 ppbv). Una flecha recorre el disco y
  * suena lo que encuentra.
  */
-import type { DataBand } from "@/lib/player";
+import { FULL_IMAGE, gridValue, type DataRegion } from "@/lib/geo/projection";
+import type { DataBand, DataBands, PlayerData } from "@/lib/player";
 
 /** Lo que hay en un punto: nivel del dato (índice en `bands`, null = sin dato) y valor normalizado (0–1). */
 export interface Cell {
@@ -39,6 +40,30 @@ export const RESOLUTIONS = [
 
 /** Ángulo del paso `j` (0 = arriba, sentido horario, en radianes de pantalla). */
 export const stepAngle = (j: number, steps: number) => (2 * Math.PI * j) / steps - Math.PI / 2;
+
+const NO_CELL: Cell = { band: null, value: null };
+
+/**
+ * Qué hay en (u, v) de la cuadrícula del motor, solo según el dato: el nivel en que
+ * cae su valor (umbrales del dataset) y el valor normalizado (percentiles 5–95).
+ * Sin dato o fuera del mapa: `band: null` (silencio). En los datasets donde la
+ * falta de dato es cero (lluvia, rayos) cuenta como el nivel más bajo.
+ */
+export function classify(
+  grid: (number | null)[][] | null,
+  u: number,
+  v: number,
+  scale: PlayerData["dataScale"],
+  levels: DataBands,
+  /** Recuadro de la imagen que cubre la cuadrícula (ver `gridValue`). */
+  region: DataRegion = FULL_IMAGE,
+): Cell {
+  if (u < 0 || u > 1 || v < 0 || v > 1) return NO_CELL;
+  const raw = gridValue(grid, u, v, region);
+  if (raw == null) return levels.missingIsZero && grid ? { band: 0, value: 0 } : NO_CELL;
+  const value = scale ? Math.max(0, Math.min(1, (raw - scale.low) / (scale.top - scale.low))) : null;
+  return { band: levels.cuts.filter((c) => raw >= c).length, value };
+}
 
 /** Nivel predominante de una lista de celdas (null si todas están sin dato). */
 function majority(cells: Cell[]): number | null {

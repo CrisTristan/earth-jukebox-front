@@ -3,8 +3,9 @@
 /* eslint-disable @next/next/no-img-element -- sin WebGL se muestra el frame plano, tal cual */
 
 import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { LoaderCircle, TriangleAlert } from "lucide-react";
-import type { CameraControls, GlobeScene } from "@/lib/globe";
+import { TriangleAlert } from "lucide-react";
+import { LoadingSpinner } from "@/components/loading-spinner";
+import type { CameraControls, GlobeScene, GlobeView } from "@/lib/globe";
 import type { ControlMode, GeoBounds } from "@/lib/globe/types";
 
 /** Acciones del visor que la interfaz puede pedir (teclado y botones). */
@@ -12,6 +13,8 @@ export interface GlobeViewerHandle {
   recenter(): void;
   rotateBy(dYaw: number, dPitch: number): void;
   zoomBy(factor: number): void;
+  /** Foto de lo que se ve ahora (para leer el mapa desde la pantalla), o null si aún no hay escena. */
+  view(): GlobeView | null;
 }
 
 interface GlobeViewerProps {
@@ -25,6 +28,8 @@ interface GlobeViewerProps {
   label: string;
   /** El sensor no envía datos (p. ej. un portátil sin giroscopio). */
   onOrientationUnavailable?: () => void;
+  /** Cambió lo que se ve (la cámara se movió o cambió el tamaño). Se llama hasta en cada fotograma. */
+  onViewChange?: () => void;
   ref?: Ref<GlobeViewerHandle>;
   className?: string;
 }
@@ -39,8 +44,10 @@ const ORIENTATION_TIMEOUT_MS = 1500;
  * para no pesar en el resto del sitio) y le pasa los cambios por métodos, sin
  * volver a crear la escena.
  */
-export function GlobeViewer({ urls, bounds, index, blend, controlMode, label, onOrientationUnavailable, ref, className = "" }: GlobeViewerProps) {
+export function GlobeViewer({ urls, bounds, index, blend, controlMode, label, onOrientationUnavailable, onViewChange, ref, className = "" }: GlobeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<GlobeScene | null>(null);
+  const viewChanged = useEffectEvent(() => onViewChange?.());
   const controlsRef = useRef<CameraControls | null>(null);
   const [scene, setScene] = useState<GlobeScene | null>(null);
   const [status, setStatus] = useState<Status>("loading");
@@ -59,7 +66,8 @@ export function GlobeViewer({ urls, bounds, index, blend, controlMode, label, on
         setStatus("unsupported");
         return;
       }
-      created = new mod.GlobeScene(container, { onFrameShown: () => setStatus("ready") });
+      created = new mod.GlobeScene(container, { onFrameShown: () => setStatus("ready"), onViewChange: () => viewChanged() });
+      sceneRef.current = created;
       setEngine(mod);
       setScene(created);
     }, () => {
@@ -68,6 +76,7 @@ export function GlobeViewer({ urls, bounds, index, blend, controlMode, label, on
 
     return () => {
       cancelled = true;
+      sceneRef.current = null;
       created?.dispose();
     };
   }, []);
@@ -107,6 +116,7 @@ export function GlobeViewer({ urls, bounds, index, blend, controlMode, label, on
     recenter: () => controlsRef.current?.recenter(),
     rotateBy: (dYaw, dPitch) => controlsRef.current?.rotateBy?.(dYaw, dPitch),
     zoomBy: (factor) => controlsRef.current?.zoomBy?.(factor),
+    view: () => sceneRef.current?.view() ?? null,
   }), []);
 
   return (
@@ -115,9 +125,7 @@ export function GlobeViewer({ urls, bounds, index, blend, controlMode, label, on
 
       {status === "loading" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <p className="glass flex items-center gap-2 rounded-full px-4 py-2 text-sm text-glass-muted">
-            <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" /> Loading the globe…
-          </p>
+          <LoadingSpinner label="Loading the globe…" />
         </div>
       )}
 

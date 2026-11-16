@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { ChevronRight, Hand, Smartphone } from "lucide-react";
 import { ApiErrorNotice } from "@/components/api-error-notice";
 import { CoverImage, CoverSkeleton } from "@/components/cover-image";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { SectionPage } from "@/components/section-page";
 import { frameUrl } from "@/lib/api/frames";
 import { getPlaylist, getPlaylists, getTrack } from "@/lib/api/client";
@@ -122,13 +123,16 @@ function GlobeTrackCard({ playlistSlug, track }: { playlistSlug: string; track: 
 
 function GlobeListSkeleton() {
   return (
-    <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading timelapses">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="flex flex-col gap-3">
-          <CoverSkeleton className="aspect-[2/1] w-full rounded-xl" />
-          <CoverSkeleton className="h-7 w-2/3 rounded-full" />
-        </div>
-      ))}
+    <div aria-busy="true">
+      <LoadingSpinner label="Loading datasets…" />
+      <div className="mt-6 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex flex-col gap-3">
+            <CoverSkeleton className="aspect-[2/1] w-full rounded-xl" />
+            <CoverSkeleton className="h-7 w-2/3 rounded-full" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
