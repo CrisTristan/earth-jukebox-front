@@ -55,7 +55,7 @@ export async function PlaylistGrid() {
   }
 
   if (playlists.length === 0) {
-    return <p className="glass rounded-3xl p-6 text-glass-muted">No playlists yet.</p>;
+    return <p className="glass rounded-lg p-6 text-glass-muted">No playlists yet.</p>;
   }
 
   return (

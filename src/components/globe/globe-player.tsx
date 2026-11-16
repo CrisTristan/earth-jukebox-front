@@ -10,6 +10,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlayback } from "@/hooks/use-playback";
 import { useRadar } from "@/hooks/use-radar";
 import { analyze, classify, RESOLUTIONS, type DiscGrid } from "@/lib/explore/disc";
+import { buildDots, drawRadar, type RadarDot } from "@/lib/explore/radar-dots";
 import type { GlobeView } from "@/lib/globe";
 import { requestOrientationPermission, supportsOrientation } from "@/lib/globe/controls/orientation-permission";
 import { GLOBE_ROOT } from "@/lib/globe/routes";
@@ -29,7 +30,13 @@ const DISC = RESOLUTIONS[1];
 /** Como mucho, un recálculo del disco cada tantos ms mientras se mueve la cámara. */
 const REFRESH_MS = 120;
 const NO_BANDS: DataBand[] = [];
-const NO_ARROW = () => {};
+const NO_DOTS: RadarDot[] = [];
+/**
+ * El radar pequeño se dibuja en un lienzo virtual de este tamaño (px) y se escala
+ * al canvas: así las bolitas y la flecha guardan las proporciones del radar del reproductor.
+ */
+const RADAR_BOX = 400;
+const RADAR_R = RADAR_BOX / 2 - 8;
 
 const BUTTON = "glass-light inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition hover:bg-white/25";
 
@@ -69,7 +76,7 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
   // ---- Radar: lo que hay dentro del círculo fijo, leído sobre el globo ----
   /** Foto de la vista (se renueva al mover la cámara, como mucho cada `REFRESH_MS`). */
   const [view, setView] = useState<GlobeView | null>(null);
-  const [radarCanvas, setRadarCanvas] = useState<HTMLCanvasElement | null>(null);
+  const radarCanvasRef = useRef<HTMLCanvasElement>(null);
   const refreshTimer = useRef<number | undefined>(undefined);
 
   /** Pide una foto nueva de la vista, agrupando los avisos seguidos (la cámara avisa en cada fotograma). */
@@ -93,6 +100,68 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
     return analyze(sample, { u: 0.5, v: 0.5, radius: RADIUS }, view.aspect, DISC.rings, DISC.steps);
   }, [view, grid, dataScale, dataBands, dataRegion]);
 
+  /** Bolitas del radar pequeño: lo mismo que hay dentro del círculo, en el lienzo virtual. */
+  const radarDots = useMemo((): RadarDot[] => {
+    if (!view || !dataBands || !grid) return NO_DOTS;
+    // Pantalla (alto = 1) a escala del radar pequeño: el círculo de la pantalla ocupa todo el radar.
+    const k = RADAR_R / (RADIUS * Math.min(view.aspect, 1));
+    const width = view.aspect * k;
+    const height = k;
+    const c = RADAR_BOX / 2;
+    return buildDots({
+      cx: c,
+      cy: c,
+      R: RADAR_R,
+      map: { left: c - width / 2, top: c - height / 2, width, height },
+      // Sobre el globo no se pueden leer los píxeles de la imagen: el color es el del nivel.
+      pixels: null,
+      sample: (u, w) => {
+        const hit = view.mapAt(2 * u - 1, 1 - 2 * w);
+        return hit ? classify(grid, hit.u, hit.v, dataScale, dataBands, dataRegion) : { band: null, value: null };
+      },
+      fallback: (band) => dataBands.bands[band]?.color ?? "#fff",
+    });
+  }, [view, grid, dataScale, dataBands, dataRegion]);
+
+  // El dibujo corre en cada cuadro (la flecha gira aunque nada más cambie); lee lo último de estas refs.
+  const arrowState = useRef<{ pos: number; reach: number }>({ pos: 0, reach: DISC.rings });
+  const dotsRef = useRef(radarDots);
+  useEffect(() => {
+    dotsRef.current = radarDots;
+  }, [radarDots]);
+  useEffect(() => {
+    const canvas = radarCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!dataBands || !canvas || !ctx) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    const paint = (ms: number) => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const size = canvas.clientWidth;
+      if (canvas.width !== Math.round(size * dpr)) {
+        canvas.width = Math.round(size * dpr);
+        canvas.height = Math.round(size * dpr);
+      }
+      const scale = (size * dpr) / RADAR_BOX;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, RADAR_BOX, RADAR_BOX);
+      const { pos, reach } = arrowState.current;
+      drawRadar(ctx, {
+        cx: RADAR_BOX / 2,
+        cy: RADAR_BOX / 2,
+        R: RADAR_R,
+        dots: dotsRef.current,
+        arrow: (2 * Math.PI * pos) / DISC.steps - Math.PI / 2,
+        reach: reach / DISC.rings,
+        t: ms / 1000,
+        still,
+      });
+      raf = requestAnimationFrame(paint);
+    };
+    raf = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(raf);
+  }, [dataBands]);
+
   const soundStarted = useRef(false);
   const radar = useRadar({
     active: !!dataBands,
@@ -100,8 +169,9 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
     bands: dataBands?.bands ?? NO_BANDS,
     volume: muted ? 0 : vol,
     profileId: track.profileId,
-    onArrow: NO_ARROW,
-    canvas: radarCanvas,
+    onArrow: (pos, reach) => {
+      arrowState.current = { pos, reach };
+    },
     onPlayingChange: (on) => {
       // En cuanto el radar suena por primera vez, arranca también el timelapse.
       if (!on || soundStarted.current) return;
@@ -284,9 +354,7 @@ export function GlobePlayer({ data }: { data: GlobeData }) {
       {/* Radar pequeño, fijo arriba a la derecha: lo que hay dentro del círculo y la flecha que lo recorre. */}
       {dataBands && (
         <canvas
-          ref={setRadarCanvas}
-          width={600}
-          height={600}
+          ref={radarCanvasRef}
           aria-hidden
           className="pointer-events-none absolute right-4 top-20 h-24 w-24 rounded-full shadow-2xl ring-1 ring-white/25 md:right-6 md:top-24 md:h-28 md:w-28"
         />

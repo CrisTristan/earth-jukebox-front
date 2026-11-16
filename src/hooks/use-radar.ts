@@ -16,8 +16,6 @@ interface RadarOptions {
   profileId: string | null;
   /** Posición de la flecha (en pasos) y anillos que alcanza, para dibujarla sobre el mapa. */
   onArrow: (pos: number, reach: number) => void;
-  /** Canvas cuadrado donde dibujar el disco del radar (opcional; sin él, el radar no tiene vista). */
-  canvas?: HTMLCanvasElement | null;
   /** Empezó o paró la vuelta (el audio ya suena, o se calló). */
   onPlayingChange?: (playing: boolean) => void;
 }
@@ -27,7 +25,7 @@ interface RadarOptions {
  * (que sigue al cursor sobre el mapa) y suena los niveles del dato que encuentra.
  * Se maneja con el ratón sobre el mapa y con el teclado; no necesita vista.
  */
-export function useRadar({ active, grid, bands, volume, profileId, onArrow, canvas = null, onPlayingChange }: RadarOptions) {
+export function useRadar({ active, grid, bands, volume, profileId, onArrow, onPlayingChange }: RadarOptions) {
   const [explorer] = useState(() => new Explorer());
   const [playing, setPlaying] = useState(false);
   const playingChanged = useEffectEvent((on: boolean) => {
@@ -39,10 +37,6 @@ export function useRadar({ active, grid, bands, volume, profileId, onArrow, canv
     explorer.on({ onPosition: (pos) => onArrow(pos, explorer.getReach()), onPlaying: (on) => playingChanged(on) });
   }, [explorer, onArrow]);
   useEffect(() => () => explorer.dispose(), [explorer]);
-  useEffect(() => {
-    explorer.attach(canvas);
-    return () => explorer.attach(null);
-  }, [explorer, canvas]);
   useEffect(() => explorer.setGrid(grid), [explorer, grid]);
   useEffect(() => explorer.setBands(bands), [explorer, bands]);
   useEffect(() => explorer.setVolume(volume), [explorer, volume]);

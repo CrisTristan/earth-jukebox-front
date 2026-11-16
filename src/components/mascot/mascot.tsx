@@ -26,7 +26,7 @@ function MascotDock() {
       <div
         id="mascot-greeting"
         hidden={!greeting}
-        className="glass-strong pointer-events-auto max-w-64 rounded-2xl p-4"
+        className="glass-strong pointer-events-auto max-w-64 rounded-lg p-4"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400">Mascot</p>
         <p className="mt-2 text-sm leading-relaxed text-glass-muted">{GREETING}</p>
