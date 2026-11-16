@@ -6,9 +6,9 @@ import { speak, stopSpeaking } from "@/lib/voice/speak";
 
 /**
  * Niveles de la guía por voz:
- * - `off`: no habla (por defecto, para no duplicar la voz de VoiceOver/TalkBack/NVDA).
- * - `full`: anuncia las páginas y lee cada botón o enlace al navegar con el
- *   teclado, con la sección en la que está.
+ * - `off`: no habla (útil para no duplicar la voz de VoiceOver/TalkBack/NVDA).
+ * - `full` (por defecto): anuncia las páginas y lee cada botón o enlace al
+ *   navegar con el teclado, con la sección en la que está.
  *
  * La voz del mapa (decir el lugar al hacer clic) es una preferencia aparte: `mapVoice`.
  */
@@ -76,6 +76,7 @@ function createPreference<T>(key: string, parse: (stored: string | null) => T, s
 /** Clave anterior ("on"/"off"), cuando la voz solo se podía encender o apagar. */
 const LEGACY_KEY = "earth-jukebox:voice";
 
+// Guía completa por defecto: solo se apaga si la persona lo eligió.
 const modePref = createPreference<VoiceMode>(
   "earth-jukebox:voice-mode",
   (stored) => {
@@ -83,9 +84,9 @@ const modePref = createPreference<VoiceMode>(
     if (stored === "full" || stored === "announcements") return "full";
     if (stored === "off") return "off";
     try {
-      return localStorage.getItem(LEGACY_KEY) === "on" ? "full" : "off";
+      return localStorage.getItem(LEGACY_KEY) === "off" ? "off" : "full";
     } catch {
-      return "off";
+      return "full";
     }
   },
   (value) => value,
@@ -99,7 +100,7 @@ const mapVoicePref = createPreference<boolean>(
 );
 
 export function VoiceProvider({ children }: { children: ReactNode }) {
-  const mode = useSyncExternalStore(modePref.subscribe, modePref.read, () => "off" as const);
+  const mode = useSyncExternalStore(modePref.subscribe, modePref.read, () => "full" as const);
   const mapVoice = useSyncExternalStore(mapVoicePref.subscribe, mapVoicePref.read, () => true);
   const enabled = mode === "full";
 

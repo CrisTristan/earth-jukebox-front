@@ -77,7 +77,7 @@ Código:
 
 ## Voz y sonido (accesibilidad)
 
-- **Guía por voz**: viene **apagada por defecto**. Se elige el nivel con "Voice" en la barra superior o con el botón del megáfono en el reproductor, y la tecla **V** la enciende o apaga en cualquier página. La preferencia se guarda en el navegador.
+- **Guía por voz**: viene **encendida por defecto** en "Full guide" (se puede apagar con "Off"). Se elige el nivel con "Voice" en la barra superior o con el botón del megáfono en el reproductor, y la tecla **V** la enciende o apaga en cualquier página. La preferencia se guarda en el navegador.
   - **Off**: no habla.
   - **Full guide**: anuncia la playlist o la track al entrar y, al moverse con el teclado (Tab, Shift+Tab, flechas) lee cada botón, enlace o control ("Play, button", "Seek, slider, value 12") y, al cambiar de sección, en cuál estás ("Playback controls. …"). Las secciones se marcan con el atributo `data-voice-section`.
   - Quien usa un lector de pantalla (VoiceOver, TalkBack, NVDA) debería dejarla en Off para no oír dos voces. La lectura de botones solo se dispara con el teclado: los toques y los gestos del lector de pantalla del móvil no la activan.
