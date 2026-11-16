@@ -6,6 +6,7 @@
 import { frameUrl } from "@/lib/api/frames";
 import type { Frame, PlaylistDetail, TrackDetail } from "@/lib/api/types";
 import { FULL_IMAGE, type DataRegion } from "@/lib/geo/projection";
+import { globePath, isGlobeTrack } from "@/lib/globe/routes";
 import type { ScaledFeature, SoundProfile } from "@/lib/sound/sonifier";
 
 /** Segundos que se muestra cada frame durante la reproducción. */
@@ -70,6 +71,8 @@ export interface PlayerData {
   dataScale: { low: number; high: number; top: number } | null;
   /** Niveles del dato según los umbrales del dataset (el disco clasifica con ellos). */
   dataBands: DataBands | null;
+  /** Ruta del globo interior para esta track, o null si sus frames no son un mapa 2:1. */
+  globeHref: string | null;
 }
 
 /** Un nivel del dato para el disco de exploración (p. ej. "humo denso, ≥ 200 ppbv"). */
@@ -207,7 +210,8 @@ function dataRegion(engine: TrackDetail["engine_metadata"], profileId: string | 
 
 const MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
-function frameLabel(date: string | undefined, index: number): string {
+/** "Jan 2024" si hay fecha válida; si no, "Frame 3". */
+export function frameLabel(date: string | undefined, index: number): string {
   if (date) {
     const d = new Date(`${date}T00:00:00Z`);
     if (!Number.isNaN(d.getTime())) return MONTH.format(d);
@@ -215,10 +219,10 @@ function frameLabel(date: string | undefined, index: number): string {
   return `Frame ${index + 1}`;
 }
 
-const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+export const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
 /** `[a, b]` numérico o null. */
-function pair(v: unknown): [number, number] | null {
+export function pair(v: unknown): [number, number] | null {
   return Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number" && Number.isFinite(n))
     ? [v[0] as number, v[1] as number]
     : null;
@@ -317,5 +321,6 @@ export function toPlayerData(playlist: PlaylistDetail, track: TrackDetail): Play
     },
     dataScale: dataScale(frames),
     dataBands: dataBands(track),
+    globeHref: isGlobeTrack(track) ? globePath(playlist.slug, track.slug) : null,
   };
 }

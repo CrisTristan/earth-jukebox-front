@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3,
+  ArrowLeft, Globe as GlobeIcon, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3,
 } from "lucide-react";
 import { useRadar } from "@/hooks/use-radar";
 import { analyze, originText, RESOLUTIONS, type Cell } from "@/lib/explore/disc";
@@ -659,6 +659,9 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <Disc3 className="h-4 w-4" />
             </button>
             <VoiceSettings variant="icon" className="glass-light rounded-full p-2" />
+            {data.globeHref && (
+              <Link href={data.globeHref} aria-label="View on globe" title="View on globe" className="glass-light rounded-full p-2"><GlobeIcon className="h-4 w-4" /></Link>
+            )}
             <button onClick={() => setInfo(true)} aria-label="Track info" className="glass-light rounded-full p-2"><Info className="h-4 w-4" /></button>
           </div>
         </footer>
