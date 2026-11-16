@@ -11,10 +11,10 @@ export const metadata: Metadata = {
 const TEAM_MEMBERS = [
   { name: "Cristian Abad", role: "Front-end Programming", photo: "/team_members/cris_abad.jpg" },
   { name: "Hector", role: "Security", photo: "/team_members/hector.jpg" },
-  { name: "Ian", role: "Frame Conversion & REST API", photo: "/team_members/ian.jpg" },
-  { name: "Juan", role: "Project Planning", photo: "/team_members/juan.jpeg" },
-  { name: "Rafael", role: "Dataset Extraction & Sonification", photo: "/team_members/rafael.jpg" },
-  { name: "Tao", role: "Front-end & Mascot Design", photo: "/team_members/tao.jpg" },
+  { name: "Ian Diaz", role: "Frame Conversion & REST API", photo: "/team_members/ian.jpg" },
+  { name: "Juan", role: "Image Transformation Engine", photo: "/team_members/juan.jpeg" },
+  { name: "Rafael Sosa", role: "Dataset Extraction &   Sonification", photo: "/team_members/rafael.jpg" },
+  { name: "Thao", role: "Front-end & Mascot Design", photo: "/team_members/tao.jpg" },
 ];
 
 export default function OurTeamPage() {
