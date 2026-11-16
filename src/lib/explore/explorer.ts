@@ -7,6 +7,9 @@
  */
 import { stepAngle, type DiscGrid } from "@/lib/explore/disc";
 import type { DataBand } from "@/lib/player";
+import { paletteFor, type Palette } from "@/lib/sound/palettes";
+import { loadInstrument, playSample, type Instrument, type InstrumentId } from "@/lib/sound/samples";
+import { noteFor } from "@/lib/sound/sonifier";
 
 /**
  * Voces del disco, de la más calmada a la más intensa. Son los sonidos del prototipo:
@@ -55,6 +58,11 @@ export class Explorer {
   private bands: DataBand[] = [];
   /** Niveles apagados por la persona. */
   private muted = new Set<number>();
+  /** Sonidos del dataset: naturaleza (camas y detalles) o un instrumento por paso. */
+  private palette: Palette = paletteFor(null);
+  private inst = new Map<InstrumentId, Instrument>();
+  /** Última nota del radar (nota y nivel) y paso en que sonó, para no repetirla en cada paso. */
+  private lastNote: { midi: number; top: number; j: number } | null = null;
 
   private playing = false;
   private inicio = 0;
@@ -123,6 +131,23 @@ export class Explorer {
   setVolume(volume: number) {
     this.volume = volume;
     if (this.audio) this.audio.master.gain.value = (volume / 100) * 1.6;
+  }
+
+  /** Paleta del dataset (perfil del motor): con qué instrumento suena el radar. */
+  setPalette(profileId: string | null) {
+    const next = paletteFor(profileId);
+    if (next === this.palette) return;
+    this.palette = next;
+    this.inst.clear();
+    if (this.audio) this.loadSamples(this.audio.ctx);
+  }
+
+  private loadSamples(ctx: AudioContext) {
+    for (const id of new Set([this.palette.radar, this.palette.accent])) {
+      void loadInstrument(ctx, id).then((inst) => {
+        if (inst && this.audio?.ctx === ctx) this.inst.set(id, inst);
+      });
+    }
   }
 
   setBands(bands: DataBand[]) {
@@ -254,6 +279,7 @@ export class Explorer {
     window.clearInterval(this.duckTimer);
     const a = this.audio;
     this.audio = null;
+    this.inst.clear();
     void a?.ctx.close().catch(() => {});
   }
 
@@ -409,6 +435,8 @@ export class Explorer {
     const voces = ctx.createGain();
     voces.connect(master);
     voces.connect(reverb);
+    // `this.audio` apunta a este grafo cuando corre la microtarea.
+    queueMicrotask(() => this.loadSamples(ctx));
     return { ctx, master, puerta, reverb, white, beds, voces };
   }
 
@@ -420,6 +448,10 @@ export class Explorer {
     const pan = Math.sin((2 * Math.PI * j) / grid.steps) * 0.75;
     const count: Record<Voice, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
     const reach = Math.min(this.reach, grid.rings);
+    if (this.palette.texture.kind !== "nature") {
+      this.musicStep(j, t, pan, reach);
+      return;
+    }
     for (let i = 0; i < reach; i++) {
       const cell = grid.cells[i]![j]!;
       if (cell.band == null || this.muted.has(cell.band)) continue;
@@ -431,6 +463,47 @@ export class Explorer {
       a.beds[k].gain.gain.setTargetAtTime((NIVEL[k] * count[k]) / reach, t, 0.14);
       a.beds[k].pan.pan.setTargetAtTime(pan, t, 0.2);
     }
+  }
+
+  /**
+   * Paso del radar en los datasets de representación: una nota del instrumento del
+   * dataset. Altura = valor medio bajo la flecha; volumen = nivel más alto que toca;
+   * en el nivel más intenso, además, el golpe del dataset (campana, timbal…).
+   *
+   * Solo suena cuando cambia lo que hay bajo la flecha (o cada 6 pasos si no cambia):
+   * una zona pareja se oye como una nota que se sostiene, no como golpes seguidos.
+   */
+  private musicStep(j: number, t: number, pan: number, reach: number) {
+    const a = this.audio!;
+    const grid = this.grid!;
+    for (const k of VOICE_LIST) a.beds[k].gain.gain.setTargetAtTime(0, t, 0.14);
+    let top = -1;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < reach; i++) {
+      const cell = grid.cells[i]![j]!;
+      if (cell.band == null || this.muted.has(cell.band)) continue;
+      top = Math.max(top, this.voiceOf(cell.band));
+      if (cell.value != null) {
+        sum += cell.value;
+        n++;
+      }
+    }
+    if (top < 0) {
+      this.lastNote = null; // sin dato bajo la flecha: silencio
+      return;
+    }
+    const midi = noteFor(n ? sum / n : top / 3) + this.palette.radarShift;
+    const last = this.lastNote;
+    const since = last ? (j - last.j + grid.steps) % grid.steps : Infinity;
+    if (last && last.midi === midi && last.top === top && since < 6) return;
+    this.lastNote = { midi, top, j };
+    const dur = Math.max(1.2, this.durPaso * 6);
+    const gain = 0.06 + 0.06 * top;
+    const inst = this.inst.get(this.palette.radar);
+    if (!inst || !playSample(inst, { t, dest: a.voces, midi, gain, pan, dur })) this.tone({ t, f: hz(midi), dur, g: gain * 0.5, pan });
+    const accent = this.inst.get(this.palette.accent);
+    if (top === 3 && accent && j % 2 === 0) playSample(accent, { t, dest: a.voces, midi: midi + 12, gain: 0.08, pan, dur: 1.2 });
   }
 
   private voiceOf(band: number): Voice {
@@ -446,10 +519,13 @@ export class Explorer {
     const step = Math.round(Math.max(0, Math.min(1, value ?? 0.5)) * 9);
     const byValue = (base: number) => base + 12 * Math.floor(step / 5) + ESCALA[step % 5]!;
     if (voice === 3 && (j + i * 5) % cada(8) === 0) {
-      // Cristal: campanitas.
-      const f = hz(byValue(74));
-      this.tone({ t, f, dur: 1.3, g: 0.07, pan });
-      this.tone({ t, f: f * 2.76, dur: 0.5, g: 0.02, pan });
+      // Cristal: campanitas (las muestras del dataset si ya cargaron).
+      const bells = this.inst.get(this.palette.accent);
+      if (!bells || !playSample(bells, { t, dest: this.audio!.voces, midi: byValue(74) + 12, gain: 0.1, pan, dur: 1.4 })) {
+        const f = hz(byValue(74));
+        this.tone({ t, f, dur: 1.3, g: 0.07, pan });
+        this.tone({ t, f: f * 2.76, dur: 0.5, g: 0.02, pan });
+      }
     }
     if (voice === 2 && (j + i) % cada(3) === 0) this.grain({ t: t + Math.random() * 0.1, dur: 0.05, g: 0.1, pan, f: 500 + Math.random() * 900 });
     if (voice === 1 && (j + i * 3) % cada(12) === 0) this.grain({ t, dur: 1.5, g: 0.07, pan, f: 900, q: 0.7 });

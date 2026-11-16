@@ -6,7 +6,7 @@
 /** Parte del proyecto que usa el servicio. */
 export type Side = "Frontend" | "Backend" | "Project";
 
-export type ServiceIcon = "satellite" | "palette" | "library" | "map" | "speech" | "type" | "database" | "container";
+export type ServiceIcon = "satellite" | "palette" | "library" | "map" | "speech" | "music" | "type" | "database" | "container";
 
 export interface ExternalService {
   name: string;
@@ -91,6 +91,20 @@ export const EXTERNAL_SERVICES: ExternalService[] = [
     ],
     usedBy: ["Frontend"],
     href: "https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API",
+  },
+  {
+    name: "Versilian Community Sample Library (VCSL)",
+    category: "Sound",
+    icon: "music",
+    description: "A free library of recorded acoustic instruments, released into the public domain (CC0) by Versilian Studios.",
+    uses: [
+      "100 instrument samples (kalimba, marimba, harp, organ, saxello, wine glasses, psaltery, didgeridoo, bells, percussion)",
+      "The melody of every track and the musical textures of the air quality, wind, ocean, CO₂ and lightning tracks",
+      "The notes of the map radar and of the click on the map",
+      "Trimmed, normalized and converted to MP3 to keep the player light (about 4 MB)",
+    ],
+    usedBy: ["Frontend"],
+    href: "https://github.com/sgossner/VCSL",
   },
   {
     name: "Google Fonts",

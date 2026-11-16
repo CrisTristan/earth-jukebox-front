@@ -56,9 +56,21 @@ export function toGeo(
   };
 }
 
-/** Valor de la cuadrícula del motor en (u, v); null donde no hay dato. */
-export function gridValue(grid: readonly (readonly (number | null)[])[] | null, u: number, v: number): number | null {
+/** Recuadro de la imagen que mide el motor `(left, top, right, bottom)`, en fracción 0–1. */
+export type DataRegion = readonly [number, number, number, number];
+
+export const FULL_IMAGE: DataRegion = [0, 0, 1, 1];
+
+/**
+ * Valor de la cuadrícula del motor en (u, v) de la imagen; null donde no hay dato
+ * o fuera de `region` (la cuadrícula solo cubre ese recuadro).
+ */
+export function gridValue(grid: readonly (readonly (number | null)[])[] | null, u: number, v: number, region: DataRegion = FULL_IMAGE): number | null {
   if (!grid?.length) return null;
+  const [left, top, right, bottom] = region;
+  u = (u - left) / (right - left);
+  v = (v - top) / (bottom - top);
+  if (!(u >= 0 && u <= 1 && v >= 0 && v <= 1)) return null;
   const row = grid[Math.min(grid.length - 1, Math.floor(v * grid.length))];
   if (!row?.length) return null;
   const value = row[Math.min(row.length - 1, Math.floor(u * row.length))];
