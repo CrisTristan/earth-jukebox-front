@@ -60,12 +60,12 @@ function SiteNavBar({ pathname }: { pathname: string | null }) {
       <div className="flex h-16 items-center justify-between gap-3 px-4 md:gap-6 md:px-10">
         <Link href="/" className="flex shrink-0 items-center gap-2.5 self-stretch" aria-label="Earth Jukebox — Home">
           <Image
-            src="/logo/stack_underflow.jpg"
+            src="/logo/stack-underflow-logo.png"
             alt=""
-            width={640}
-            height={640}
+            width={1280}
+            height={1229}
             preload
-            className="h-full w-auto rounded-full object-cover"
+            className="h-full w-auto"
           />
           {/* En móvil se omite "Earth" para dejar sitio a la barra de iconos */}
           <span className="hidden text-sm font-bold uppercase tracking-[0.18em] md:inline">Earth</span>
