@@ -34,6 +34,30 @@ export const INSTRUMENTS = {
 
 export type InstrumentId = keyof typeof INSTRUMENTS;
 
+/** Nombre de cada instrumento para decirlo en voz alta. */
+export const INSTRUMENT_NAMES: Record<InstrumentId, string> = {
+  kalimba: "kalimba",
+  marimba: "marimba",
+  harp: "harp",
+  glock: "glockenspiel",
+  vibes: "vibraphone",
+  xylo: "xylophone",
+  saxello: "saxello",
+  organ: "organ",
+  recorder: "recorder",
+  glass: "wine glasses",
+  "psaltery-bow": "bowed psaltery",
+  "psaltery-pluck": "plucked psaltery",
+  didgeridoo: "didgeridoo",
+  woodblock: "woodblock",
+  shaker: "shaker",
+  cabasa: "cabasa",
+  handbell: "hand bells",
+  timpani: "timpani",
+  chimes: "wind chimes",
+  "ocean-drum": "ocean drum",
+};
+
 export interface Instrument {
   id: InstrumentId;
   /** Afinado: cada muestra tiene su nota y se reafina. Si no, golpes sueltos. */

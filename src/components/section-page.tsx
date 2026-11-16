@@ -23,7 +23,7 @@ export function SectionPage({ eyebrow, title, intro, children }: SectionPageProp
 /** Tarjeta de marcador de posición para contenido pendiente. */
 export function PlaceholderCard({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="glass rounded-3xl p-6">
+    <div className="glass rounded-lg p-6">
       <p className="font-display text-2xl">{title}</p>
       <p className="mt-2 text-sm leading-relaxed text-glass-muted">{children ?? "Coming soon."}</p>
     </div>

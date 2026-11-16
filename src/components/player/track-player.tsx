@@ -5,11 +5,11 @@
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3,
+  ArrowLeft, Info, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, AudioWaveform, ChevronRight, ChevronDown, ChevronUp, Satellite, ListMusic, Disc3, Minus, Plus, MapPin,
 } from "lucide-react";
 import { useRadar } from "@/hooks/use-radar";
 import { analyze, originText, RESOLUTIONS, type Cell } from "@/lib/explore/disc";
-import { VOICES } from "@/lib/explore/explorer";
+import { buildDots, drawRadar, readPixels, type FramePixels, type RadarDot } from "@/lib/explore/radar-dots";
 import { useDrawerSwipe } from "@/hooks/use-drawer-swipe";
 import { MOBILE_LANDSCAPE, useMediaQuery } from "@/hooks/use-media-query";
 import { Announce } from "@/components/voice/announce";
@@ -29,20 +29,12 @@ const speakable = (text: string) =>
   text.replace(/≥\s*/g, "at least ").replace(/<\s*/g, "below ").replace(/(\d)–(-?\d)/g, "$1 to $2");
 import { LAYER_MODES, PRESETS, type LayerMode, type Preset } from "@/lib/sound/sonifier";
 import { paletteFor } from "@/lib/sound/palettes";
+import { INSTRUMENT_NAMES } from "@/lib/sound/samples";
+import { PLAYER_SHORTCUTS, RADAR_SHORTCUTS } from "@/lib/shortcuts";
 import { themeStyle } from "@/lib/theme";
 
-const SHORTCUTS = [
-  ["Space", "Play / pause"],
-  ["← →", "Previous / next frame"],
-  ["S", "Sound on / off"],
-  ["E", "Explore: a radar follows the pointer and plays the data levels around it"],
-  ["Explore", "Arrows move the radar, Enter or click says the place and its level, Space pauses it, + and − change its size"],
-  ["D", "Describe the current frame"],
-  ["Click", "Hear the place and its value on the map"],
-  ["V", "Voice guide on / off"],
-  ["M", "Map voice on / off"],
-  ["Esc", "Close panels"],
-] as const;
+/** Atajos que se listan en el panel de información (los mismos que en How it works). */
+const SHORTCUTS = [...PLAYER_SHORTCUTS, ...RADAR_SHORTCUTS.filter(([k]) => k !== "E" && k !== "Esc").map(([k, v]) => [`Radar · ${k}`, v] as const)];
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const fmtValue = (v: number) => (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
@@ -97,11 +89,16 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   const [explore, setExplore] = useState(false);
   const [origin, setOrigin] = useState({ u: 0.5, v: 0.5 });
   const [radius, setRadius] = useState(0.45);
-  /** Rectángulo del mapa dentro del escenario (px), para dibujar los anillos encima. */
+  /** Rectángulo del mapa dentro del escenario (px), para dibujar el radar encima. */
   const [mapBox, setMapBox] = useState<{ left: number; top: number; width: number; height: number; aspect: number } | null>(null);
-  const arrowRef = useRef<SVGLineElement>(null);
+  /** Posición de la flecha (en pasos) y anillos que alcanza; la actualiza el motor del radar. */
   const arrowState = useRef({ pos: 0, reach: 6 });
-  const [discReach, setDiscReach] = useState(6);
+  const radarCanvasRef = useRef<HTMLCanvasElement>(null);
+  /** Bolitas del radar y dónde está (centro y radio en px), recalculados al moverlo. */
+  const radarView = useRef<{ cx: number; cy: number; R: number; dots: RadarDot[] } | null>(null);
+  const framePixels = useRef<{ id: string; pixels: FramePixels | null } | null>(null);
+  /** Movimientos con el teclado sin anunciar: al quedarse quieto, se dice dónde quedó (0 = nada pendiente). */
+  const [nudges, setNudges] = useState(0);
 
   const voice = useVoice();
   const palette = paletteFor(track.profileId);
@@ -221,41 +218,117 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       : !discGrid ? "The globe's camera isn't calibrated for this frame, so the radar can't read it. Try another frame." : null;
   const discOriginText = discGrid && sampler && levels ? originText(discGrid, sampleFrame(sampler, origin.u, origin.v), levels.bands) : null;
 
-  const measureMap = () => {
+  /** Dónde está el mapa dentro del escenario; solo actualiza el estado si cambió. */
+  const measureMap = useEffectEvent(() => {
     const stage = stageRef.current?.getBoundingClientRect();
     const img = stageRef.current?.querySelector("img");
     const map = mapRect();
     if (!stage || !map || !img?.naturalWidth) return;
     const next = { left: map.left - stage.left, top: map.top - stage.top, width: map.width, height: map.height, aspect: img.naturalWidth / img.naturalHeight };
-    // Solo si cambió: este efecto corre en cada render.
     setMapBox((prev) => (prev && (Object.keys(next) as (keyof typeof next)[]).every((k) => Math.abs(prev[k] - next[k]) < 0.5) ? prev : next));
-  };
-  useEffect(() => {
-    if (!explore) return;
-    measureMap();
-    window.addEventListener("resize", measureMap);
-    return () => window.removeEventListener("resize", measureMap);
   });
+  // Se mide al activar el radar y cuando cambia el tamaño, no en cada render: medir en
+  // cada render y guardar el resultado en el estado podía encadenar renders sin fin.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!explore || !stage) return;
+    const measure = () => measureMap();
+    measure();
+    const resize = new ResizeObserver(measure);
+    resize.observe(stage);
+    const img = stage.querySelector("img");
+    img?.addEventListener("load", measure);
+    // Al terminar la animación de entrada (que escala la página) el mapa queda en su sitio final.
+    stage.closest(".jb-enter")?.addEventListener("animationend", measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      resize.disconnect();
+      img?.removeEventListener("load", measure);
+      stage.closest(".jb-enter")?.removeEventListener("animationend", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [explore]);
 
-  /** Flecha del disco dibujada también sobre el mapa. */
-  const drawArrow = (pos: number, reach: number) => {
+  /** El motor del radar avisa dónde está la flecha; el canvas la dibuja en el siguiente cuadro. */
+  const onArrow = (pos: number, reach: number) => {
     arrowState.current = { pos, reach };
-    if (reach !== discReach) setDiscReach(reach);
-    const line = arrowRef.current;
-    if (!line || !mapBox) return;
-    const R = radius * Math.min(mapBox.width, mapBox.height) * (reach / res.rings);
-    const a = (2 * Math.PI * pos) / res.steps - Math.PI / 2;
+  };
+
+  /** Bolitas del radar: qué hay (y de qué color es la imagen) en cada punto del círculo. */
+  const rebuildDots = useEffectEvent(() => {
+    const stage = stageRef.current;
+    if (!stage || !mapBox || !frame) {
+      radarView.current = null;
+      return;
+    }
+    const img = stage.querySelectorAll("img")[current];
+    if (img?.complete && img.naturalWidth && framePixels.current?.id !== frame.id) {
+      framePixels.current = { id: frame.id, pixels: readPixels(img) };
+    }
+    const pixels = framePixels.current?.id === frame.id ? framePixels.current.pixels : null;
     const cx = mapBox.left + origin.u * mapBox.width;
     const cy = mapBox.top + origin.v * mapBox.height;
-    line.setAttribute("x2", String(cx + R * Math.cos(a)));
-    line.setAttribute("y2", String(cy + R * Math.sin(a)));
-  };
-  useEffect(() => drawArrow(arrowState.current.pos, arrowState.current.reach));
+    const R = radius * Math.min(mapBox.width, mapBox.height);
+    const none = { band: null, value: null };
+    const dots = buildDots({
+      cx, cy, R, map: mapBox, pixels,
+      sample: (u, v) => (sampler ? sampleFrame(sampler, u, v) : none),
+      fallback: (band) => levels?.bands[band]?.color ?? "#fff",
+    });
+    radarView.current = { cx, cy, R, dots };
+  });
+  useEffect(() => {
+    if (explore) rebuildDots();
+  }, [explore, mapBox, origin, radius, current, discGrid]);
 
-  const moveOrigin = (u: number, v: number) => setOrigin({ u: Math.max(0.02, Math.min(0.98, u)), v: Math.max(0.02, Math.min(0.98, v)) });
+  // Dibujo del radar en cada cuadro (la flecha gira aunque nada más cambie).
+  useEffect(() => {
+    const canvas = radarCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!explore || !canvas || !ctx) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    const paint = (ms: number) => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const view = radarView.current;
+      if (view) {
+        const { pos, reach } = arrowState.current;
+        drawRadar(ctx, { ...view, arrow: (2 * Math.PI * pos) / res.steps - Math.PI / 2, reach: reach / res.rings, t: ms / 1000, still });
+      }
+      raf = requestAnimationFrame(paint);
+    };
+    raf = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(raf);
+  }, [explore, res]);
+
+  const moveOrigin = (u: number, v: number) => {
+    const next = { u: Math.max(0.02, Math.min(0.98, u)), v: Math.max(0.02, Math.min(0.98, v)) };
+    // Sin cambio, sin render.
+    setOrigin((prev) => (Math.abs(prev.u - next.u) < 1e-4 && Math.abs(prev.v - next.v) < 1e-4 ? prev : next));
+  };
+  /** El radar sigue al ratón como mucho una vez por cuadro (cada movimiento recalcula el radar). */
+  const followRef = useRef<{ raf: number; u: number; v: number }>({ raf: 0, u: 0, v: 0 });
+  const followPointer = (u: number, v: number) => {
+    const f = followRef.current;
+    f.u = u;
+    f.v = v;
+    f.raf ||= requestAnimationFrame(() => {
+      f.raf = 0;
+      moveOrigin(f.u, f.v);
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(followRef.current.raf), []);
 
   // ---- Radar: suena alrededor del origen, sin interfaz visual propia ----
-  const radar = useRadar({ active: explore, grid: discGrid, bands: levels?.bands ?? NO_BANDS, volume: muted ? 0 : vol, profileId: track.profileId, onArrow: drawArrow });
+  const radar = useRadar({ active: explore, grid: discGrid, bands: levels?.bands ?? NO_BANDS, volume: muted ? 0 : vol, profileId: track.profileId, onArrow });
 
   /** Dice algo del radar: en la región aria-live (lectores de pantalla) y con la voz del mapa. */
   const sayRadar = (text: string) => {
@@ -268,19 +341,19 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     if (explore) {
       radar.stop();
       setExplore(false);
-      sayRadar("Explore off.");
+      setNudges(0);
+      sayRadar("Radar off.");
       return;
     }
     player.pause();
     setInfo(false);
     setExplore(true);
     radar.start(); // dentro del gesto (clic o tecla E): crea el audio
-    const scale = levels?.bands.map((b) => `${b.name} (${b.range}) sounds like ${VOICES[b.voice]!.toLowerCase()}`).join("; ");
+    // Corto: qué hace y cómo suena. Las teclas se explican en "Track info" y en How it works.
+    const scale = levels ? ` Levels: ${levels.bands.map((b) => b.name).join(", ")}.` : "";
     sayRadar(
-      `Explore on. The radar turns around the pointer and plays the levels of ${track.listening.subject ?? "the data"} it finds. ` +
-        `Move the pointer over the map or use the arrow keys to move it. Click, or press Enter, to hear the place and its level. ` +
-        `Space pauses, plus and minus change its size, E or Escape exits. ` +
-        (scale ? `Levels: ${scale}.` : "") +
+      `Radar on: ${track.listening.subject ?? "the data"} around a point, on the ${INSTRUMENT_NAMES[palette.radar]}. ` +
+        `Higher notes, higher levels.${scale}` +
         (discUnavailable ? ` ${discUnavailable}` : ""),
     );
   };
@@ -317,27 +390,31 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     return `${place}: ${band ? `${band.name}, ` : ""}${value}.`;
   };
 
-  const onStageKeyDown = (e: React.KeyboardEvent) => {
-    if (!explore) return;
-    const m = ({ ArrowLeft: [-0.03, 0], ArrowRight: [0.03, 0], ArrowUp: [0, -0.03], ArrowDown: [0, 0.03] } as Record<string, [number, number]>)[e.key];
-    if (m) {
-      e.preventDefault();
-      moveOrigin(origin.u + m[0], origin.v + m[1]);
-    } else if (e.key === "Enter") {
-      // Como el clic: decir dónde está el radar.
-      e.preventDefault();
-      sayRadar(placeAtPoint(origin.u, origin.v));
-    } else if (e.key === " ") {
-      e.preventDefault();
-      const wasPlaying = radar.playing;
-      void radar.toggle();
-      sayRadar(wasPlaying ? "Radar paused." : "Radar playing.");
-    } else if (e.key === "+" || e.key === "=" || e.key === "-") {
-      e.preventDefault();
-      const r = Math.max(0.12, Math.min(0.7, radius + (e.key === "-" ? -0.03 : 0.03)));
-      setRadius(r);
-      sayRadar(`Radar size: ${Math.round(r * 100)} percent.`);
-    }
+  /** Dice el lugar y el nivel donde quedó el radar (tras moverlo con las flechas). */
+  const announcePlace = useEffectEvent(() => sayRadar(placeAtPoint(origin.u, origin.v)));
+
+  /** Mueve el radar con el teclado; al dejar de moverlo, dice dónde quedó. */
+  const nudgeRadar = (du: number, dv: number) => {
+    moveOrigin(origin.u + du, origin.v + dv);
+    setNudges((n) => n + 1);
+  };
+  useEffect(() => {
+    if (!nudges) return;
+    const id = window.setTimeout(() => announcePlace(), 650);
+    return () => window.clearTimeout(id);
+  }, [nudges]);
+
+  /** Cambia el área del radar (fracción del lado corto del mapa); con `say`, lo dice. */
+  const changeRadius = (delta: number, say = true) => {
+    const r = Math.max(0.12, Math.min(0.7, Math.round((radius + delta) * 100) / 100));
+    setRadius(r);
+    if (say) sayRadar(`Radar area: ${Math.round(r * 100)} percent.`);
+  };
+
+  const toggleRadarSound = () => {
+    const wasPlaying = radar.playing;
+    void radar.toggle();
+    sayRadar(wasPlaying ? "Radar paused." : "Radar playing.");
   };
 
   // ---- Atajos de teclado ----
@@ -346,9 +423,36 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     if (target?.closest("input, textarea, select")) return;
     const k = e.key;
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat;
-    // Con el foco en el mapa explorando, las flechas, Espacio y +/- son del radar (`onStageKeyDown`).
-    const inExplore = !!target?.closest("[data-explore]");
     const onInteractive = !!target?.closest("button, a");
+    // Con el radar activo, sus teclas funcionan desde cualquier parte (no hace falta el foco en el mapa).
+    if (explore && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const d = e.shiftKey ? 0.1 : 0.03;
+      const move = ({ ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] } as Record<string, [number, number]>)[k];
+      if (move) {
+        e.preventDefault();
+        nudgeRadar(move[0], move[1]);
+        return;
+      }
+      // Por la tecla o por su posición (teclado numérico y distribuciones donde "+" no lleva Shift).
+      const bigger = k === "+" || k === "=" || e.code === "NumpadAdd" || e.code === "Equal";
+      const smaller = k === "-" || k === "_" || e.code === "NumpadSubtract" || e.code === "Minus";
+      if (bigger || smaller) {
+        e.preventDefault();
+        changeRadius(smaller ? -0.05 : 0.05);
+        return;
+      }
+      if (k === " " && !onInteractive) {
+        e.preventDefault();
+        toggleRadarSound();
+        return;
+      }
+      if (k === "Enter" && !onInteractive) {
+        e.preventDefault();
+        setNudges(0);
+        sayRadar(placeAtPoint(origin.u, origin.v));
+        return;
+      }
+    }
     if ((k === "e" || k === "E") && plain) {
       toggleExplore();
     } else if ((k === "m" || k === "M") && plain) {
@@ -360,7 +464,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       setInfo(false);
       setSynthOpen(false);
       if (explore) toggleExplore();
-    } else if (inExplore) {
+    } else if (explore) {
       return;
     } else if (k === " " && !onInteractive) {
       e.preventDefault();
@@ -394,13 +498,13 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
     }
     pointerRef.current = { x: e.clientX, y: e.clientY };
     rafRef.current ||= requestAnimationFrame(updateCursor);
-    if (explore) {
+    if (explore && !(e.target as Element).closest("[data-radar-toolbar]")) {
       // Explorando: el origen del radar sigue al cursor sobre el mapa (fuera de él se queda donde estaba).
       const map = mapRect();
       if (map && map.width && map.height) {
         const u = (e.clientX - map.left) / map.width;
         const v = (e.clientY - map.top) / map.height;
-        if (u >= 0 && u <= 1 && v >= 0 && v <= 1) moveOrigin(u, v);
+        if (u >= 0 && u <= 1 && v >= 0 && v <= 1) followPointer(u, v);
       }
     }
   };
@@ -411,7 +515,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
   };
 
   const onStageClick = (e: React.MouseEvent<HTMLElement>) => {
-    if ((e.target as HTMLElement).closest("a, button")) return;
+    if ((e.target as HTMLElement).closest("a, button, input, [data-radar-toolbar]")) return;
     cursorDotRef.current?.animate([{ scale: "1" }, { scale: "1.9" }, { scale: "1" }], { duration: 280, easing: "ease-out" });
     if (explore) {
       // Explorando: el clic fija el radar ahí y dice el lugar y el nivel del dato.
@@ -452,8 +556,8 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
       <div className="jb-enter flex h-dvh flex-col md:gap-4 md:p-4 land:gap-0 land:p-0">
         <div className="flex min-h-0 flex-1 md:gap-4 land:gap-0">
           {/* Sidebar solo en escritorio; en móvil horizontal no se muestra. */}
-          <aside className="glass hidden md:flex w-1/4 max-w-xs flex-col rounded-3xl p-5 land:hidden">
-            <Link href={`/playlists/${playlist.slug}`} className="glass-light flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm">
+          <aside className="glass hidden md:flex w-1/4 max-w-xs flex-col rounded-lg p-5 land:hidden">
+            <Link href={`/playlists/${playlist.slug}`} className="glass-light flex w-fit items-center gap-2 rounded-md px-4 py-2 text-sm">
               <ArrowLeft className="h-4 w-4" /> Playlist
             </Link>
             <p className="mt-6 text-xs uppercase tracking-widest text-glass-muted">Playlist</p>
@@ -494,9 +598,9 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           </aside>
 
           <section ref={stageRef} data-voice-section="Map" onPointerMove={onStageMove} onPointerLeave={onStageLeave} onClick={onStageClick}
-            onKeyDown={onStageKeyDown} data-explore={explore ? "" : undefined}
-            {...(explore ? { tabIndex: 0, role: "application", "aria-label": `Map radar. Move the pointer or use the arrow keys to move it; Space pauses; plus and minus change its size; E exits. ${discOriginText ?? discUnavailable ?? ""}` } : {})}
-            className="glass relative flex-1 cursor-none overflow-hidden rounded-3xl bg-black/60 focus-visible:outline-4 focus-visible:outline-amber-300 max-md:rounded-none max-md:border-0 land:fixed land:inset-0 land:rounded-none land:border-0">
+            onWheel={(e) => { if (explore) changeRadius(e.deltaY < 0 ? 0.03 : -0.03, false); }} data-explore={explore ? "" : undefined}
+            {...(explore ? { tabIndex: 0, role: "application", "aria-label": `Map radar. Keyboard help is in Track info. ${discOriginText ?? discUnavailable ?? ""}` } : {})}
+            className="glass relative flex-1 cursor-none overflow-hidden rounded-lg bg-black/60 focus-visible:outline-4 focus-visible:outline-amber-300 max-md:rounded-none max-md:border-0 land:fixed land:inset-0 land:rounded-none land:border-0">
             {/* Timelapse: todos los frames apilados; el actual se muestra con fundido. */}
             {frames.map((f, i) => (
               <img key={f.id} src={f.url}
@@ -509,23 +613,39 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
             )}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-            {/* Explorar: anillos alrededor del origen y la flecha del disco, sobre el mapa. */}
-            {explore && mapBox && (() => {
-              const cx = mapBox.left + origin.u * mapBox.width;
-              const cy = mapBox.top + origin.v * mapBox.height;
-              const R = radius * Math.min(mapBox.width, mapBox.height);
-              const reach = discReach;
-              return (
-                <svg aria-hidden className="pointer-events-none absolute inset-0 z-10 h-full w-full">
-                  {Array.from({ length: res.rings }, (_, i) => (
-                    <circle key={i} cx={cx} cy={cy} r={(R * (i + 1)) / res.rings} fill="none"
-                      stroke={i + 1 === reach ? "#ffc23d" : "rgba(255,255,255,.45)"} strokeWidth={i + 1 === reach ? 2.5 : 1} />
-                  ))}
-                  <line ref={arrowRef} x1={cx} y1={cy} x2={cx} y2={cy - (R * reach) / res.rings} stroke="#fff" strokeWidth={3} strokeLinecap="round" />
-                  <circle cx={cx} cy={cy} r={6} fill="#fff" stroke="#000" strokeWidth={2} />
-                </svg>
-              );
-            })()}
+            {/* Radar: bolitas con el color del mapa alrededor del origen y la flecha que gira. */}
+            {explore && <canvas ref={radarCanvasRef} aria-hidden className="pointer-events-none absolute inset-0 z-10 h-full w-full" />}
+
+            {/* Controles del radar: se alcanzan con Tab y cada uno dice qué hace. */}
+            {explore && (
+              <div role="toolbar" aria-label="Radar controls" data-radar-toolbar=""
+                className="glass-strong absolute left-1/2 top-14 z-30 flex -translate-x-1/2 items-center gap-1 rounded-md px-2 py-1.5 text-xs md:top-20">
+                <button type="button" onClick={toggleRadarSound} aria-label={radar.playing ? "Pause radar (Space)" : "Play radar (Space)"} className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-amber-300">
+                  {radar.playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </button>
+                <span className="mx-1 h-5 w-px bg-white/15" aria-hidden />
+                <button type="button" onClick={() => changeRadius(-0.05)} aria-label="Smaller radar area (minus)" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-amber-300">
+                  <Minus className="h-4 w-4" />
+                </button>
+                <label className="flex items-center gap-2">
+                  <span className="hidden text-glass-muted sm:inline">Area</span>
+                  <input type="range" min={12} max={70} step={1} value={Math.round(radius * 100)}
+                    onChange={(e) => changeRadius(+e.target.value / 100 - radius, false)}
+                    aria-label="Radar area" aria-valuetext={`${Math.round(radius * 100)} percent of the map`}
+                    className="h-1 w-20 cursor-pointer accent-amber-300 sm:w-28" />
+                </label>
+                <button type="button" onClick={() => changeRadius(0.05)} aria-label="Larger radar area (plus)" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-amber-300">
+                  <Plus className="h-4 w-4" />
+                </button>
+                <span className="mx-1 h-5 w-px bg-white/15" aria-hidden />
+                <button type="button" onClick={() => sayRadar(placeAtPoint(origin.u, origin.v))} aria-label="Say where the radar is (Enter)" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-amber-300">
+                  <MapPin className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={toggleExplore} aria-label="Turn the radar off (E)" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-amber-300">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
             {/*
               Solo si se abrió la URL directamente: el navegador no deja sonar sin un gesto.
@@ -544,7 +664,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
             </div>
 
             <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2 md:inset-x-6 md:top-6">
-              <div className="glass-light flex min-w-0 items-center gap-2 rounded-full px-4 py-1.5 text-xs uppercase tracking-widest">
+              <div className="glass-light flex min-w-0 items-center gap-2 rounded-md bg-black/55 px-4 py-1.5 text-xs uppercase tracking-widest">
                 <span className={`h-2 w-2 shrink-0 rounded-full bg-red-400 ${playing ? "animate-pulse" : ""}`} />
                 <span className="hidden shrink-0 sm:inline">Earth Data Timelapse</span>
                 {frame && (
@@ -555,7 +675,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               </div>
               <div className="pointer-events-auto flex shrink-0 items-center gap-2">
                 <MapVoiceSwitch on={voice.mapVoice} onChange={voice.setMapVoice} />
-                <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-full p-2" aria-label="Back to playlist">
+                <Link href={`/playlists/${playlist.slug}`} className="md:hidden glass-light rounded-md bg-black/55 p-2" aria-label="Back to playlist">
                   <ArrowLeft className="h-4 w-4" />
                 </Link>
               </div>
@@ -594,7 +714,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           <ChevronDown className="h-4 w-4" />
         </button>
         <footer data-voice-section="Playback controls" inert={land && !controlsOpen}
-          className="glass-strong relative flex h-[10vh] min-h-20 items-center gap-4 rounded-3xl px-4 md:px-6 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 land:h-auto land:min-h-0 land:gap-3 land:rounded-b-none land:border-x-0 land:border-b-0 land:py-1.5">
+          className="glass-strong relative flex h-[10vh] min-h-20 items-center gap-4 rounded-lg px-4 md:px-6 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 land:h-auto land:min-h-0 land:gap-3 land:rounded-b-none land:border-x-0 land:border-b-0 land:py-1.5">
           <div className="flex w-1/4 min-w-0 items-center gap-3">
             {frame && <img src={frame.url} alt="" className="h-12 w-12 rounded-xl bg-black object-cover land:hidden" />}
             <div className="hidden sm:block min-w-0">
@@ -629,11 +749,11 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
           </div>
           <div className="flex w-1/4 items-center justify-end gap-2">
             <div className="relative">
-              <button onClick={() => setSynthOpen(!synthOpen)} aria-label="Sound settings" aria-expanded={synthOpen} className="glass-light flex items-center gap-2 rounded-full px-3 py-2 text-xs">
+              <button onClick={() => setSynthOpen(!synthOpen)} aria-label="Sound settings" aria-expanded={synthOpen} className="glass-light flex items-center gap-2 rounded-md px-3 py-2 text-xs">
                 <AudioWaveform className="h-4 w-4" /> <span className="hidden lg:inline">{synth}</span>
               </button>
               {synthOpen && (
-                <div data-voice-section="Sound settings menu" className="glass-strong jb-enter absolute bottom-14 right-0 w-52 rounded-2xl p-2">
+                <div data-voice-section="Sound settings menu" className="glass-strong jb-enter absolute bottom-14 right-0 w-52 rounded-lg p-2">
                   <p className="px-3 py-2 text-[10px] uppercase tracking-widest text-glass-muted">Sound</p>
                   {LAYER_MODES.map((m) => (
                     <button key={m} onClick={() => setLayers(m)} aria-pressed={m === layers}
@@ -679,7 +799,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
         )}
 
         <div onClick={() => setInfo(false)} className={`fixed inset-0 z-40 bg-black/20 transition-opacity duration-500 ${info ? "opacity-100" : "pointer-events-none opacity-0"}`} />
-        <aside aria-hidden={!info} inert={!info} data-voice-section="Track information panel" className={`glass-strong fixed bottom-4 right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] overflow-y-auto rounded-3xl p-7 transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${info ? "translate-x-0" : "translate-x-[110%]"}`}>
+        <aside aria-hidden={!info} inert={!info} data-voice-section="Track information panel" className={`glass-strong fixed bottom-4 right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] overflow-y-auto rounded-lg p-7 transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${info ? "translate-x-0" : "translate-x-[110%]"}`}>
           <button onClick={() => setInfo(false)} aria-label="Close" className="glass-light absolute right-5 top-5 rounded-full p-2"><X className="h-4 w-4" /></button>
           <p className="text-xs uppercase tracking-widest text-glass-muted">Metadata & Science</p>
           <h3 className="mt-2 pr-10 font-display text-4xl leading-tight">{track.title}</h3>
@@ -692,7 +812,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               {frame && <p className="mt-2 text-glass-muted">Now: {describe(current)}.</p>}
             </div>
             {(track.source || track.topic) && (
-              <div className="glass-light rounded-2xl p-4">
+              <div className="glass-light rounded-lg p-4">
                 <p className="text-xs uppercase tracking-widest text-glass-muted">Source</p>
                 {track.source && <p className="mt-1 flex items-center gap-2 font-semibold"><Satellite className="h-4 w-4 shrink-0" /> {track.source}</p>}
                 {track.topic && <p className="mt-1 text-glass-muted">Topic: {track.topic}</p>}
@@ -735,7 +855,7 @@ export function TrackPlayer({ data }: { data: PlayerData }) {
               <p className="text-xs uppercase tracking-widest text-glass-muted">Keyboard</p>
               <ul className="mt-3 space-y-1.5">
                 {SHORTCUTS.map(([k, v]) => (
-                  <li key={k} className="flex gap-3"><kbd className="w-14 shrink-0 font-semibold">{k}</kbd><span className="text-glass-muted">{v}</span></li>
+                  <li key={k} className="flex gap-3"><kbd className="w-32 shrink-0 font-semibold">{k}</kbd><span className="text-glass-muted">{v}</span></li>
                 ))}
               </ul>
             </div>
@@ -755,7 +875,7 @@ function MapVoiceSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean)
       aria-checked={on}
       onClick={() => onChange(!on)}
       title="Say the name of the place when you click the map (M)"
-      className="glass-light flex cursor-pointer items-center gap-2.5 rounded-full py-1.5 pl-3 pr-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
+      className="glass-light flex cursor-pointer items-center gap-2.5 rounded-md bg-black/55 py-1.5 pl-3 pr-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
     >
       <span>Map voice</span>
       <span aria-hidden className={`relative h-5 w-9 rounded-full transition-colors duration-300 ${on ? "bg-teal-400" : "bg-white/20"}`}>

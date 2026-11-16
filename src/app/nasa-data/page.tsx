@@ -5,6 +5,7 @@ import { ArrowUpRight, ChevronDown, Database, Film, FolderDown, Headphones, Pale
 import { CoverImage } from "@/components/cover-image";
 import { ExternalLink } from "@/components/external-link";
 import { SectionPage } from "@/components/section-page";
+import { SectionTabs } from "@/components/section-tabs";
 import {
   CHALLENGE_RESOURCES,
   DATASET_GROUPS,
@@ -51,23 +52,17 @@ export default function NasaDataPage() {
       </dl>
 
       {/* Índice */}
-      <nav aria-label="On this page" className="mt-8 flex flex-wrap gap-2">
-        {SECTIONS.map((s) => (
-          <a key={s.id} href={`#${s.id}`} className="glass-light rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-widest text-glass-muted hover:text-glass">
-            {s.label}
-          </a>
-        ))}
-      </nav>
+      <div className="mt-8"><SectionTabs items={SECTIONS} /></div>
 
       {/* Cómo leer los valores */}
-      <section data-voice-section="How to read the values" aria-labelledby="scales-title" className="glass mt-10 rounded-3xl p-6 md:p-8">
+      <section data-voice-section="How to read the values" aria-labelledby="scales-title" className="glass mt-10 rounded-lg p-6 md:p-8">
         <h2 id="scales-title" className="font-display text-3xl">How to read the values</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-glass-muted">
           Our engine reads the color of every pixel and turns it into a number using the visualization’s color scale. Not every scale is equally precise, so each dataset is labeled with how its values should be read.
         </p>
         <ul className="mt-6 grid gap-4 md:grid-cols-3">
           {(Object.keys(SCALE_KINDS) as ScaleKind[]).map((kind) => (
-            <li key={kind} className="rounded-2xl bg-white/5 p-4">
+            <li key={kind} className="rounded-lg bg-white/5 p-4">
               <ScaleBadge kind={kind} />
               <p className="mt-3 text-sm leading-relaxed text-glass-muted">{SCALE_KINDS[kind].description}</p>
             </li>
@@ -103,7 +98,7 @@ export default function NasaDataPage() {
                 href={r.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="glass-light group flex w-full items-start gap-4 rounded-2xl p-4"
+                className="glass-light group flex w-full items-start gap-4 rounded-lg p-4"
               >
                 <span aria-hidden className="font-display text-2xl leading-none text-teal-300/80 tabular-nums">
                   {String(i + 1).padStart(2, "0")}
@@ -129,9 +124,9 @@ export default function NasaDataPage() {
           {TECHNICAL_RESOURCES.map((group, i) => {
             const Icon = TECHNICAL_ICONS[i] ?? Database;
             return (
-              <details key={group.title} className="glass group/details rounded-3xl open:bg-white/[0.12]">
+              <details key={group.title} className="glass group/details rounded-lg open:bg-white/[0.12]">
                 <summary className="flex cursor-pointer list-none items-center gap-4 rounded-3xl p-5 md:p-6 [&::-webkit-details-marker]:hidden">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/10">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/10">
                     <Icon aria-hidden className="h-5 w-5 text-teal-300" />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -159,7 +154,7 @@ export default function NasaDataPage() {
       </section>
 
       {/* Créditos */}
-      <section data-voice-section="Credits" aria-labelledby="credits-title" className="glass-strong mt-24 flex flex-col gap-4 rounded-3xl p-6 md:flex-row md:items-center md:p-8">
+      <section data-voice-section="Credits" aria-labelledby="credits-title" className="glass-strong mt-24 flex flex-col gap-4 rounded-lg p-6 md:flex-row md:items-center md:p-8">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-teal-300/15">
           <Satellite aria-hidden className="h-6 w-6 text-teal-300" />
         </span>
@@ -184,7 +179,7 @@ export default function NasaDataPage() {
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="glass flex flex-col-reverse rounded-3xl p-6">
+    <div className="glass flex flex-col-reverse rounded-lg p-6">
       <dt className="mt-1 text-sm text-glass-muted">{label}</dt>
       <dd className="font-display text-5xl leading-none tabular-nums">{value}</dd>
     </div>
@@ -212,7 +207,7 @@ function ScaleBadge({ kind }: { kind: ScaleKind }) {
 
 function DatasetCard({ dataset: d }: { dataset: Dataset }) {
   return (
-    <article className="glass group flex w-full flex-col overflow-hidden rounded-3xl transition duration-300 hover:-translate-y-1 hover:bg-white/[0.14]">
+    <article className="glass group flex w-full flex-col overflow-hidden rounded-lg transition duration-300 hover:-translate-y-1 hover:bg-white/[0.14]">
       <div className="relative">
         <CoverImage src={d.image} alt={`First frame of ${d.title}`} className="aspect-[2/1] w-full transition duration-500 group-hover:scale-[1.03]" />
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
@@ -226,11 +221,11 @@ function DatasetCard({ dataset: d }: { dataset: Dataset }) {
         <p className="mt-2 text-sm leading-relaxed text-glass-muted">{d.summary}</p>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-2xl bg-white/5 p-3">
+          <div className="rounded-lg bg-white/5 p-3">
             <dt className="text-[10px] uppercase tracking-widest text-glass-muted">Period</dt>
             <dd className="mt-1 font-semibold leading-snug">{d.period}</dd>
           </div>
-          <div className="rounded-2xl bg-white/5 p-3">
+          <div className="rounded-lg bg-white/5 p-3">
             <dt className="text-[10px] uppercase tracking-widest text-glass-muted">Scale</dt>
             <dd className="mt-1 font-semibold leading-snug">{d.scale}</dd>
           </div>
